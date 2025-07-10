@@ -10,6 +10,8 @@ dataroot: ${paths.data_dir}
 hdmaproot: ${paths.data_dir}/nuscenes_processed_map
 is_lyft: False
 
+cls_tag: TextConditionedTemporalNuScenesDataset
+
 # Grid
 grid:
   # xbound: [-50.0, 50.0, 0.5]

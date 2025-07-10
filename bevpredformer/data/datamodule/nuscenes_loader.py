@@ -15,7 +15,10 @@ from einops import rearrange
 from nuscenes.nuscenes import NuScenes
 from torch import Tensor
 
-from bevpredformer.data.dataset import TemporalNuScenesDataset
+from bevpredformer.data.dataset import (
+    TemporalNuScenesDataset,
+    TextConditionedTemporalNuScenesDataset,
+)
 
 try:
     from lyft_dataset_sdk.lyftdataset import LyftDataset

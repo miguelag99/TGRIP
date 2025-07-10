@@ -25,17 +25,18 @@ profile: False
 
 # simply provide checkpoint path to resume training
 ckpt:
-  resume: True
+  resume: False
   # path: null
   # model:
   #   freeze: null
   #   load: 'all'
   
-  path: /home/perception/workspace/logs/BEVPredFormerPredictor/train/runs/effvit_SpUnet_2TripletTST_scale05_shortrange_2025-07-06_17-59-30/checkpoints/last.ckpt
+  path: /home/perception/workspace/checkpoints/BEVPredformer_Backbone_effvitL2_05.ckpt
   model:
     freeze: ['net.backbone', 'net.neck', 'net.view_transform', 'net.decoder',
      'net.coord_selector', 'net.query_gen']
-    load: 'all'
+    load: ['net.backbone', 'net.neck', 'net.view_transform', 'net.decoder',
+     'net.coord_selector', 'net.query_gen']
 
 
 # seed for random number generators in pytorch, numpy and python.random
