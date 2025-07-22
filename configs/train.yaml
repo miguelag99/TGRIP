@@ -28,7 +28,7 @@ ckpt:
   resume: False
   path: null
   model:
-    freeze: null
+    freeze: ['net.text_encoder']
     load: 'all'
 
 # seed for random number generators in pytorch, numpy and python.random

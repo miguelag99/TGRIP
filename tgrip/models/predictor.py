@@ -27,6 +27,8 @@ class TGRIPPredictor(Network):
         view_transform=None,
         autoencoder=None,
         temporal=None,
+        text_encoder=None,
+        text_conditioner=None,
         use_future_ego=False,
         out_seq_len=6,
         in_seq_len=3,
@@ -58,9 +60,14 @@ class TGRIPPredictor(Network):
         self.use_future_ego = use_future_ego
         
         # Prediction
+        self.in_seq_len = in_seq_len
         self.out_seq_len = out_seq_len
         self.n_classes = len(heads.class_weights)
-        
+
+        # Text
+        self.text_encoder = text_encoder
+        self.text_conditioner = text_conditioner
+
     # Decoder.
     def _prepare_decoder(self, query, hq_wq):
         # Alias
@@ -87,8 +94,18 @@ class TGRIPPredictor(Network):
         else:
             bev_query = self.temporal(bev_query)
             return bev_query
-    
-    def forward(self, imgs, rots, trans, intrins, bev_aug, egoTin_to_seq, **kwargs):
+
+    def forward(
+        self,
+        imgs,
+        rots,
+        trans,
+        intrins,
+        bev_aug,
+        egoTin_to_seq,
+        text_condition,
+        **kwargs,
+    ):
         (
             dict_shape,
             dict_vox,
@@ -105,6 +122,17 @@ class TGRIPPredictor(Network):
         b_t = (dict_shape["b"], dict_shape["t"])
         query, hq_wq = self.query_gen(b_t)
         query_pos, hq_wq = self.query_gen(b_t)
+        
+        if self.text_conditioner is not None:
+            text_feats = self.text_encoder(text_condition)
+            text_feats = text_feats.unsqueeze(1).repeat(1,self.in_seq_len,1)
+            query = rearrange(query, "b t h w c -> (b t) c h w")
+            query = self.text_conditioner(
+                query,
+                rearrange(text_feats, "b t c -> (b t) c")
+            )
+            query = rearrange(query, "(b t) c h w -> b t h w c", t=self.in_seq_len)
+
         bev_query, *_ = self.view_transform(
             query, query_pos, dict_img["img_feats"], dict_vox
         )

@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from tgrip.utils.debug import debug_hook
+
 class TextCrossAttention(nn.Module):
     def __init__(self, bev_dim=128, text_dim=512, patch_size=10, attn_heads=4):
         """
@@ -17,6 +19,8 @@ class TextCrossAttention(nn.Module):
         self.text_proj = nn.Linear(text_dim, bev_dim)
         self.cross_attn = nn.MultiheadAttention(bev_dim, attn_heads, batch_first=True)
         self.patch_size = patch_size
+        
+        self.register_forward_hook(debug_hook)
 
     def forward(self, bev_feats, text_feat):
         """
