@@ -3,7 +3,7 @@
 clear
 
 # Define paths
-OPS_PATH="/home/perception/workspace/bevpredformer/ops"
+OPS_PATH="/home/perception/workspace/tgrip/ops"
 
 # Check if build directories exist
 if [ ! -d "${OPS_PATH}/defattn/build" ] || \

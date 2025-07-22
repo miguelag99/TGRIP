@@ -1,8 +1,8 @@
 wandb:
   _target_: pytorch_lightning.loggers.wandb.WandbLogger
-  id: 1621fv64
+  id: null
   anonymous: null 
-  project: "bevpredformer"
+  project: "tgrip"
   log_model: False 
   prefix: ""
   group: ""
@@ -10,7 +10,7 @@ wandb:
   job_type: ""
 
   save_dir: ${hydra:run.dir}
-  name: effvit_SpUnet_2TripletTST_scale05_shortrange # ${model.name}
+  name: ${model.name}
   version: ''
   offline: False
 

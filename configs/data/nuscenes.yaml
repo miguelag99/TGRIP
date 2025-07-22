@@ -2,7 +2,7 @@ defaults:
   - _self_ 
   - augs@img_params: scale_0_5.yaml
 
-_target_: bevpredformer.data.datamodule.NuScenesDatamodule
+_target_: tgrip.data.datamodule.NuScenesDatamodule
 
 # Nuscenes
 version: mini
@@ -19,7 +19,7 @@ grid:
 
 # Images
 img_loader:
-  _target_: bevpredformer.utils.imgs.ImageLoader
+  _target_: tgrip.utils.imgs.ImageLoader
   mode: PIL
 
 img_params:

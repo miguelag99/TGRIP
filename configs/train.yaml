@@ -3,7 +3,7 @@
 defaults:
   - _self_
   - data: nuscenes_pred.yaml
-  - model: BEVPredFormerPredictor.yaml
+  - model: TGRIPPredictor.yaml
   - callbacks: default_pl.yaml
   - plugins: null
   - logger: default_pl.yaml
@@ -26,18 +26,10 @@ profile: False
 # simply provide checkpoint path to resume training
 ckpt:
   resume: False
-  # path: null
-  # model:
-  #   freeze: null
-  #   load: 'all'
-  
-  path: /home/perception/workspace/checkpoints/BEVPredformer_Backbone_effvitL2_05.ckpt
+  path: null
   model:
-    freeze: ['net.backbone', 'net.neck', 'net.view_transform', 'net.decoder',
-     'net.coord_selector', 'net.query_gen']
-    load: ['net.backbone', 'net.neck', 'net.view_transform', 'net.decoder',
-     'net.coord_selector', 'net.query_gen']
-
+    freeze: null
+    load: 'all'
 
 # seed for random number generators in pytorch, numpy and python.random
 seed: null

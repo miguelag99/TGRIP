@@ -3,7 +3,7 @@
 defaults:
   - _self_
   - data: nuscenes_pred.yaml
-  - model: BEVPredFormerPredictor.yaml
+  - model: TGRIPPredictor.yaml
   - callbacks: default_pl.yaml
   - plugins: null
   - logger: default_pl.yaml
@@ -26,7 +26,7 @@ profile: False
 
 # simply provide checkpoint path to evaluate
 ckpt:
-  path: "checkpoints/effvit_SpUnet_2TripletTST_256_ps4_scale05.ckpt"
+  path: "checkpoints/.ckpt"
   model:
     freeze: null
     load: 'all'
