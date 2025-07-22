@@ -15,7 +15,7 @@ from tgrip.utils.debug import debug_hook
 
 
 
-class TRGIPPredictor(Network):
+class TGRIPPredictor(Network):
     def __init__(
         self,
         # Modules
