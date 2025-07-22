@@ -15,7 +15,7 @@ name: TGRIP
 _target_: tgrip.models.PredictionTrainer
 
 net:
-  _target_: tgrip.models.segmentor.TRGIPSegmentor
+  _target_: tgrip.models.segmentor.TGRIPSegmentor
 
   in_shape:
     query_gen: [200,200] # bev queries
