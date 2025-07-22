@@ -1,4 +1,4 @@
-_target_: bevpredformer.models.autoencoder.SparseUNet
+_target_: tgrip.models.autoencoder.SparseUNet
 
 in_c: ${model.net.out_c.vt}
 with_tail_conv: False

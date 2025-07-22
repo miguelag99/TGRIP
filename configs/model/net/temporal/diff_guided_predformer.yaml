@@ -2,7 +2,7 @@
 defaults:
   - _self_
 
-_target_: bevpredformer.models.temporal.DiffGuidedPredFormerTemporal
+_target_: tgrip.models.temporal.DiffGuidedPredFormerTemporal
 
 in_channels: ${eval:${model.net.out_c.autoencoder} + 6} # Additional channels for the future ego transform
 out_channels: ${model.net.out_c.autoencoder}

@@ -1,4 +1,4 @@
-_target_: bevpredformer.models.layers.attention.PositionalEncodingMap
+_target_: tgrip.models.layers.attention.PositionalEncodingMap
 m: 8
 with_mlp: True
 in_c: 3

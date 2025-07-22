@@ -3,7 +3,7 @@ defaults:
   - coordembd: fourier.yaml
   - heightcomp@heightcomp.comp: convn.yaml
 
-_target_: bevpredformer.models.view_transform.GridSampleVT
+_target_: tgrip.models.view_transform.GridSampleVT
 voxel_shape: ${model.net.in_shape.projector}
 in_c: ${model.net.in_c.vt}
 out_c: ${model.net.out_c.vt}

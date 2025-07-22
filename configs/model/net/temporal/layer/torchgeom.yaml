@@ -2,7 +2,7 @@ defaults:
   - _self_
   - attnlayer: transformer.yaml
 
-classname: bevpredformer.models.layers.TorchGeomAttnBlock
+classname: tgrip.models.layers.TorchGeomAttnBlock
 mode: torchgeom
 in_c: ${model.net.out_c.vt}
 mid_c: ${model.net.out_c.vt}

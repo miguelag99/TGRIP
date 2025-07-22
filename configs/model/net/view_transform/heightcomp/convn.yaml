@@ -1,4 +1,4 @@
-classname: bevpredformer.models.layers.ConvNormAct
+classname: tgrip.models.layers.ConvNormAct
 mode: convn
 in_c: ${model.net.in_c.vt} # Multiplied later by Ycam
 out_c: ${model.net.out_c.vt}

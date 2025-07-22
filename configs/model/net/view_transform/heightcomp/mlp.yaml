@@ -1,4 +1,4 @@
-classname: bevpredformer.models.layers.MLP
+classname: tgrip.models.layers.MLP
 mode: mlp
 in_c: ${model.net.in_c.vt} # Multiplied later by Ycam
 mid_c: ${model.net.out_c.vt}
