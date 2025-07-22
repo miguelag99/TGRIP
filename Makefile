@@ -5,7 +5,7 @@ IMAGE_NAME := tgrip
 WANDB_API_KEY := $(shell echo $$WANDB_API_KEY)
 UID := $(shell id -u)
 GID := $(shell id -g)
-NUSCENES_PATH := /home/robesafe/nuscenes/trainval
+NUSCENES_PATH := /path/to/nuscenes/dataset
 DGX_GPU_ID = 0
 
 define run_docker
