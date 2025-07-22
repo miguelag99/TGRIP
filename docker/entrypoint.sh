@@ -36,7 +36,7 @@ fi
 
 clear
 
-figlet -c "BEVPredFormer"
+figlet -c "TGRIP"
 echo -e "\n------------------------------------ System info ----------------------------------------\n"
 
 # Get current username and store in a local variable

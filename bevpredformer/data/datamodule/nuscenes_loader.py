@@ -305,6 +305,7 @@ def collate_batch(batch: List[Tensor]):
         "bbox_egopose",
         "bbox_egopose_aug",
         "tokens",
+        "text_condition"
     ]
     keys = batch[0].keys()
     out_dict = {

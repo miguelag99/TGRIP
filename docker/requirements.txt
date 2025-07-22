@@ -29,6 +29,7 @@ torch_geometric
 transformers
 numpy==1.26.4
 scipy>=1.5.2
+imageio
 
 # Visualization
 pyfiglet
