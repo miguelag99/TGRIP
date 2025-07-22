@@ -217,19 +217,16 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
             if scene_condition is not None and scene_condition['keyword'] != "all":
                 # If we filter by dynamic tags, we need to check the attribute tokens.
                 if scene_condition.get("keyword") in ["moving", "stopped", "parked"]:
-                    try:
-                        if len(inst["attribute_tokens"]) > 0:
-                            print(inst["attribute_tokens"])
-                            status = self.nusc.get(
-                                "attribute", inst["attribute_tokens"][0]
-                            )["name"]
-                            if status not in scene_condition["values"]:
-                                continue
-                        else:
-                            # If there are no attribute tokens, we can not filter.
+                    if len(inst["attribute_tokens"]) > 0:
+                        status = self.nusc.get(
+                            "attribute", inst["attribute_tokens"][0]
+                        )["name"]
+                        if status not in scene_condition["values"]:
                             continue
-                    except:
-                        import pdb; pdb.set_trace()
+                    else:
+                        # If there are no attribute tokens, we can not filter.
+                        continue
+
                     # Check if the moving objects have a valid velocity.
                     # Avoid conflict due to the lack of velocity attributes in bycicles.
                     if scene_condition["keyword"] == "moving":
