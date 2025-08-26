@@ -1,4 +1,5 @@
 import sys
+import os
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -19,6 +20,9 @@ from tgrip import utils
 
 log = utils.get_pylogger(__name__)
 torch.set_float32_matmul_precision("high")
+
+# Workaround for loading models with weights only for torch > 2.6
+os.environ["TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD"] = "1"
 
 @utils.task_wrapper
 def train(cfg: DictConfig) -> Tuple[dict, dict]:
