@@ -4,17 +4,23 @@
   <a href="https://github.com/miguelag99/BEVPredFormer/blob/main/CHANGELOG.md">
     <img src="https://img.shields.io/badge/Changelog-v1.0.0-2ea44f?style=for-the-badge" alt="CHANGELOG">
   </a>
+  <a href="https://python.org">
+    <img src="https://img.shields.io/badge/Python-3.12.3-3776AB.svg?style=for-the-badge&logo=python" alt="python">
+  </a>
   <a href="https://pytorch.org">
-    <img src="https://img.shields.io/badge/PyTorch-2.5.1-EE4C2C.svg?style=for-the-badge&logo=pytorch" alt="pytorch">
+    <img src="https://img.shields.io/badge/PyTorch-2.8.0-EE4C2C.svg?style=for-the-badge&logo=pytorch" alt="pytorch">
   </a>
   <a href="https://lightning.ai/docs/pytorch/stable/">
-    <img src="https://img.shields.io/badge/Lightning-1.9.5-purple?style=for-the-badge&logo=lightning" alt="Lightning">
+    <img src="https://img.shields.io/badge/Lightning-2.5.4-purple?style=for-the-badge&logo=lightning" alt="Lightning">
   </a>
   <a href="https://wandb.ai/">
     <img src="https://img.shields.io/badge/Wandb-gray?style=for-the-badge&logo=weightsandbiases" alt="wandb">
   </a>
   <a href="https://www.docker.com">
     <img src="https://img.shields.io/badge/Docker-gray?style=for-the-badge&logo=docker&logoColor=white&labelColor=%23007FFF" alt="Docker">
+  </a>
+  <a href="https://docs.astral.sh/uv/">
+    <img src="https://img.shields.io/badge/UV-gray?style=for-the-badge&logo=uv&logoColor=white&labelColor=DE5FE9" alt="UV">
   </a>
 </div>
 
@@ -61,13 +67,14 @@ make run
 ```
 
 This command will run a bash inside the container and mount the current directory and dataset inside the container.
+The launch script will automatically build the venv with requirements and CUDA ops the first time using `uv`.
 
 ### 2.1 Training
 
 To train any version of BEVPredFormer, you can use the following command inside the Docker container:
 
 ```bash
-python bevpredformer/train.py
+uv run bevpredformer/train.py
 ```
 
 The different configuration parameters can be tuned in the different yaml files located in the *configs* directory.
