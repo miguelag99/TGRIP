@@ -1,11 +1,11 @@
-torch==2.6.0
-torchvision==0.21.0
-torchaudio==2.6.0
-nuscenes-devkit==1.1.0
+torch>=2.6.0
+torchvision>=0.21.0
+torchaudio>=2.6.0
+nuscenes-devkit>=1.1.0
 lyft_dataset_sdk
 black
 timm
-pytorch-lightning<2.0.0
+lightning>2.0.0
 torchmetrics<1.0.0
 efficientnet_pytorch==0.7.1
 einops
@@ -23,7 +23,7 @@ pyrootutils
 pre-commit
 click             # for easy script cli
 rich              # beautiful text formatting in terminal
-shapely==1.8.5    # for creating maps.
+shapely>=1.8.5    # for creating maps.
 pytest
 torch_geometric
 transformers

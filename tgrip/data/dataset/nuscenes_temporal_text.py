@@ -5,7 +5,6 @@ from copy import deepcopy
 import numpy as np
 import numpy.typing as npt
 import torch
-from pytorch_lightning.utilities import rank_zero_only
 
 from .nuscenes_common import (
     DETECTION_CLS,

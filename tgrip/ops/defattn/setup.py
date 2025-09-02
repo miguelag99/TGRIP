@@ -46,7 +46,7 @@ def get_extensions():
     else:
         raise NotImplementedError('Cuda is not availabel')
 
-    sources = [os.path.join(extensions_dir, s) for s in sources]
+    sources = [os.path.relpath(s, this_dir) for s in sources]
     include_dirs = [extensions_dir]
     ext_modules = [
         extension(
@@ -65,7 +65,7 @@ setup(
     author="Weijie Su",
     url="https://github.com/fundamentalvision/Deformable-DETR",
     description="PyTorch Wrapper for CUDA Functions of Multi-Scale Deformable Attention",
-    packages=find_packages(exclude=("configs", "tests",)),
+    # packages=find_packages(exclude=("configs", "tests",)),
     ext_modules=get_extensions(),
     cmdclass={"build_ext": torch.utils.cpp_extension.BuildExtension},
 )

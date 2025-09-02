@@ -7,9 +7,9 @@ import torch
 import torch.nn as nn
 from omegaconf import DictConfig
 from psutil import virtual_memory
-from pytorch_lightning.core import LightningModule
-from pytorch_lightning.loggers.wandb import WandbLogger
-from pytorch_lightning.utilities import rank_zero_only
+from lightning.pytorch.core import LightningModule
+from lightning.pytorch.loggers.wandb import WandbLogger
+from lightning.pytorch.utilities.rank_zero import rank_zero_only
 from torch import Tensor
 from torch.cuda import max_memory_allocated, max_memory_reserved
 

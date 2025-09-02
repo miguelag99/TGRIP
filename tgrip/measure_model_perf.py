@@ -6,10 +6,10 @@ from typing import List, Optional, Tuple
 
 import hydra
 import pyrootutils
-import pytorch_lightning as L
+import lightning as L
 import torch
 from omegaconf import DictConfig
-from pytorch_lightning import LightningDataModule
+from lightning import LightningDataModule
 
 pyrootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
