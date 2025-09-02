@@ -19,6 +19,7 @@ dependencies = [
     "lightning>2.0.0",
     "lyft-dataset-sdk>=0.0.8",
     "matplotlib<3.8.0",
+    "multiscaledeformableattention>=1.0",
     "numpy==1.26.4",
     "nuscenes-devkit>=1.1.0",
     "opencv-python>=4.11.0.86",
@@ -31,6 +32,7 @@ dependencies = [
     "scipy>=1.10.0",
     "setuptools>=80.9.0",
     "shapely>=1.8.5",
+    "sparse-gs>=1.0",
     "spconv-cu126>=2.3.8",
     "tensorboard>=2.20.0",
     "timm>=1.0.19",
@@ -58,6 +60,13 @@ torch = [
 torchvision = [
   { index = "pytorch-cu129" },
 ]
+multiscaledeformableattention = [
+  { path = "./tgrip/ops/defattn" },
+]
+sparse_gs = [
+  { path = "./tgrip/ops/gs" },
+]
+
 
 [[tool.uv.index]]
 name = "pytorch-cu129"
