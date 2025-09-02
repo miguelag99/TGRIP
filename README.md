@@ -13,6 +13,8 @@
   <a href="https://lightning.ai/docs/pytorch/stable/">
     <img src="https://img.shields.io/badge/Lightning-2.5.4-purple?style=for-the-badge&logo=lightning" alt="Lightning">
   </a>
+</div>
+<div align=center>
   <a href="https://wandb.ai/">
     <img src="https://img.shields.io/badge/Wandb-gray?style=for-the-badge&logo=weightsandbiases" alt="wandb">
   </a>
@@ -74,7 +76,7 @@ The launch script will automatically build the venv with requirements and CUDA o
 To train any version of BEVPredFormer, you can use the following command inside the Docker container:
 
 ```bash
-uv run bevpredformer/train.py
+uv run tgrip/train.py
 ```
 
 The different configuration parameters can be tuned in the different yaml files located in the *configs* directory.
@@ -82,6 +84,14 @@ The different configuration parameters can be tuned in the different yaml files 
 It is recommended to use some of the pretrained models available:
 
 - BEVPredformer_Backbone_05.ckpt: Pretrained model with EfficientViT backbone for semantic segmentation (no prediction head). Recommended to use as a freezed backbone to train prediction models. Keys to load and freeze in train.yaml: `'net.backbone', 'net.neck', 'net.view_transform', 'net.decoder', 'net.coord_selector' and 'net.query_gen'`.
+
+### 2.2 Map preprocessing
+
+To preprocess the NuScenes maps, you can use the following command inside the Docker container:
+
+```bash
+uv run tgrip/preprocess_nuscenes_map.py --split val train --version=trainval
+```
 
 ## Contact
 

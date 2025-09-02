@@ -19,3 +19,4 @@ from .instance_pred import (
     generate_instance_colours,
     plot_instance_map
 )
+from .nuscenes_map_api import FixedNuScenesMap
