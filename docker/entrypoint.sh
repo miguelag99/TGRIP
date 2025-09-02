@@ -6,8 +6,8 @@ clear
 if [ ! -d ".venv" ]; then
   echo " .venv not found — updating virtual environment..."
   uv sync --link-mode=copy
-  uv pip install tgrip/ops/defattn/ --no-build-isolation --link-mode=copy
-  uv pip install tgrip/ops/gs/ --no-build-isolation --link-mode=copy
+#   uv pip install tgrip/ops/defattn/ --no-build-isolation --link-mode=copy
+#   uv pip install tgrip/ops/gs/ --no-build-isolation --link-mode=copy
   echo " ✅ .venv updated"
 fi
 
