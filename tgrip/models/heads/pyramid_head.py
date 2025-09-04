@@ -131,7 +131,8 @@ class MultiPyramidHead(nn.Module):
         # HDMap head
         if with_hdmap:
             convnormact_conv_chdmap = nn.Sequential(
-                ConvNormAct(shared_out_c, latent_dim,
+                nn.Flatten(1, 2),
+                ConvNormAct(shared_out_c*self.in_seq_len, latent_dim,
                             3, 1, False, norm, nn.ReLU),
                 nn.Conv2d(
                     latent_dim, len(self.hdmap_names),

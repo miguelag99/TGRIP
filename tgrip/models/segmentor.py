@@ -122,17 +122,7 @@ class TGRIPSegmentor(Network):
         b_t = (dict_shape["b"], dict_shape["t"])
         query, hq_wq = self.query_gen(b_t)
         query_pos, hq_wq = self.query_gen(b_t)
-        
-        if self.text_conditioner is not None:
-            text_feats = self.text_encoder(text_condition)
-            text_feats = text_feats.unsqueeze(1).repeat(1,self.in_seq_len,1)
-            query = rearrange(query, "b t h w c -> (b t) c h w")
-            query = self.text_conditioner(
-                query,
-                rearrange(text_feats, "b t c -> (b t) c")
-            )
-            query = rearrange(query, "(b t) c h w -> b t h w c", t=self.in_seq_len)
-
+    
         bev_query, *_ = self.view_transform(
             query, query_pos, dict_img["img_feats"], dict_vox
         )
@@ -172,7 +162,17 @@ class TGRIPSegmentor(Network):
             
         # Temporal
         bev_query = self.forward_temporal(bev_query)
+        
+        if self.text_conditioner is not None:
+            text_feats = self.text_encoder(text_condition)
+            bev_query = rearrange(bev_query, "b t c h w -> b (t c) h w")
+            bev_query, attn_weights = self.text_conditioner(
+                bev_query,
+                text_feats
+            )
+            bev_query = rearrange(bev_query, "b (t c) h w -> b t c h w", t=self.in_seq_len)
 
+        
         # Heads
         dict_out = self.heads(bev_query)
                 

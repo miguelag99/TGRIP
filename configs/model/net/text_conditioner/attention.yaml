@@ -3,7 +3,7 @@ defaults:
 
 _target_: tgrip.models.text_conditioner.TextCrossAttention
 
-bev_dim: ${model.net.out_c.query_gen}
+bev_dim: ${eval:"${model.net.out_c.query_gen} * ${model.net.in_seq_len}"}
 text_dim: 512 # CLIP text encoder output dimension
 patch_size: 10
 attn_heads: 4

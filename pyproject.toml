@@ -29,6 +29,7 @@ dependencies = [
     "pyrootutils>=1.0.4",
     "pytest>=8.4.1",
     "rich>=14.1.0",
+    "scikit-learn>=1.7.1",
     "scipy>=1.10.0",
     "setuptools>=80.9.0",
     "shapely>=1.8.5",

@@ -38,12 +38,13 @@ class TextCrossAttention(nn.Module):
         # Downsample to patch tokens
         bev_patches = self.downsample(bev_feats)  # [B, C, H/patch, W/patch]
         bev_tokens = bev_patches.flatten(2).transpose(1, 2)
-
+        
         text_tokens = self.text_proj(text_feat).unsqueeze(1)  # [B, 1, C]
-
+        text_tokens = text_tokens.expand(B, bev_tokens.shape[1], C)
+        
         # Cross-attention: BEV tokens attend to text
-        attn_out, _ = self.cross_attn(
-            query=bev_tokens, key=text_tokens, value=text_tokens
+        attn_out, attn_weights = self.cross_attn(
+            query=bev_tokens, key=text_tokens, value=text_tokens, need_weights=True
         )  # [B, N, C]
         fused_tokens = bev_tokens + attn_out  # residual connection
 
@@ -55,4 +56,4 @@ class TextCrossAttention(nn.Module):
             fused, size=(H, W), mode="bilinear", align_corners=False
         )
 
-        return fused_upsampled
+        return fused_upsampled, attn_weights

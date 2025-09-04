@@ -175,6 +175,15 @@ class TGRIPPredictor(Network):
                 
         # Temporal
         bev_query = self.forward_temporal(bev_query)
+        
+        if self.text_conditioner is not None:
+            text_feats = self.text_encoder(text_condition)
+            bev_query = rearrange(bev_query, "b t c h w -> b (t c) h w")
+            bev_query, attn_weights = self.text_conditioner(
+                bev_query,
+                text_feats
+            )
+            bev_query = rearrange(bev_query, "b (t c) h w -> b t c h w", t=self.in_seq_len)
 
         # Heads
         dict_out = self.heads(bev_query)
