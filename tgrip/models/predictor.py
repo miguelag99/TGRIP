@@ -123,24 +123,11 @@ class TGRIPPredictor(Network):
         query, hq_wq = self.query_gen(b_t)
         query_pos, hq_wq = self.query_gen(b_t)
         
-        if self.text_conditioner is not None:
-            text_feats = self.text_encoder(text_condition)
-            text_feats = text_feats.unsqueeze(1).repeat(1,self.in_seq_len,1)
-            query = rearrange(query, "b t h w c -> (b t) c h w")
-            query = self.text_conditioner(
-                query,
-                rearrange(text_feats, "b t c -> (b t) c")
-            )
-            query = rearrange(query, "(b t) c h w -> b t h w c", t=self.in_seq_len)
-
         bev_query, *_ = self.view_transform(
             query, query_pos, dict_img["img_feats"], dict_vox
         )
         hq, wq = hq_wq
-        # bev_query = rearrange(
-        #     bev_query, "b nq (hq wq) c -> b nq c hq wq", hq=hq, wq=wq
-        # )   
-             
+
         # Optional: decoder
         if self.decoder is not None:
             bev_query = self.forward_decoder(bev_query, hq_wq)
