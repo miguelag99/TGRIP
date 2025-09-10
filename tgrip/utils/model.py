@@ -1,8 +1,10 @@
 from collections import defaultdict
 from typing import List, Union
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import minmax_scale
 
 import torch
-
+import numpy as np
 
 def load_state_model(
     model,
@@ -65,3 +67,41 @@ def load_state_model(
     if verbose > 0:
         print(message)
     return model
+
+
+def extract_pca_features(
+    features: torch.Tensor,
+    n_components: int = 3,
+) -> torch.Tensor:
+    # Ensure the input is on CPU and converted to numpy
+    B, C, H, W = features.shape
+    
+    # Reshape features to (Batch, Channels, H*W)
+    projected_heatmap = features.view(B, C, -1).cpu().numpy()
+    
+    # Initialize output list
+    output = []
+    
+    # Process each batch item
+    for heatmap in projected_heatmap:
+        # Transpose to make it (H*W, Channels) for PCA
+        heatmap_transposed = heatmap.T
+        
+        # Perform PCA
+        pca = PCA(n_components=n_components)
+        pca_features = pca.fit_transform(heatmap_transposed)
+        
+        # Normalize to 0-255 range
+        pca_features = minmax_scale(pca_features, feature_range=(0, 255)).astype(np.uint8)
+        
+        # Reshape back to (n_components, H, W)
+        pca_features = pca_features.T.reshape(n_components, H, W)
+        
+        # Convert to torch tensor
+        pca_features = torch.from_numpy(pca_features)
+        output.append(pca_features)
+    
+    # Stack the batch
+    pca_features = torch.stack(output, dim=0)
+    
+    return pca_features

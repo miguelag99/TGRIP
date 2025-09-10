@@ -2,7 +2,7 @@ from .geom import GeomScaler
 from .instantiators import instantiate_callbacks, instantiate_loggers
 from .launch import modif_config_based_on_flags
 from .logger import log_hyperparameters, prepare_to_log_binimg, prepare_to_log_hdmap
-from .model import load_state_model
+from .model import load_state_model, extract_pca_features
 from .object import (
     get_element_from_nested_key,
     list_dict_to_dict_list,
