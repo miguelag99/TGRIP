@@ -56,6 +56,7 @@ SCENE_TEXT_CONDITIONS = [
     #     "values": "vehicle.trailer"
     # }
 ]
+
 POSITIONAL_CONDITIONS= {
     'front': None,
     'front_left': None,

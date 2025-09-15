@@ -79,10 +79,16 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
             with torch.no_grad():
                 cond['text_embedding'] = self.text_encoder([cond['text_condition']]).cpu()
 
+        ## Semantic maps
+        # Create text embeddings for conditions
         for cond in self.pose_conditions:
             with torch.no_grad():
                 self.pose_conditions[cond] = self.text_encoder([cond]).cpu()
-                        
+
+        self.full_pos_semantic_map = self._init_positional_semantic_map(
+            channels=self.text_conditions[0]['text_embedding'].shape[1],
+        )
+
         del self.text_encoder # Free memory
                 
     def get_bev_related_data(
@@ -156,7 +162,6 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
         )
         if 'semantic_positional_map' in self.keys_to_keep:
             semantic_positional_map, semantic_positional_map_aug = self._generate_positional_semantic_map(
-                channels=self.text_conditions[0]['text_embedding'].shape[1],
                 bev_aug=bev_aug
             )
             
@@ -515,28 +520,27 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
             "semantic_positional_map_aug": semantic_positional_map_aug,
         }
     
-    def _generate_positional_semantic_map(
+    def _init_positional_semantic_map(
         self,
         channels: int = 512,
-        bev_aug: np.ndarray = np.eye(4),
     ) -> torch.Tensor:
         """Generate a positional semantic map based on the text conditions.
-
+        
+        6 regions are defined: front, front_left, front_right, back, back_left, back_right.
+        
+        To avoid invalid values with data augmentation, we create the map with double
+        extension and then crop it during data loading.
+        
         Args:
-            bev_aug (npt.NDArray): Augmentation matrix moving the bev. Impacts the BEV.
-
+            channels (int): Number of channels for the positional semantic map.
         Returns:
             torch.Tensor: Positional semantic map.
         """
         # Alias
-        h, w = self.nx[0], self.nx[1]
+        h, w = 2*self.nx[0], 2*self.nx[1]
 
         # Initialize
         positional_semantic = torch.zeros(channels, h, w)
-        positional_semantic_aug = torch.zeros_like(positional_semantic)
-
-        # Are augmentations activated ?
-        bool_aug_activated = not np.allclose(bev_aug, np.eye(4))
 
         # Create a BEV semantic map filled with positional semantic embeddings
         H, W = h, w
@@ -546,8 +550,8 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
         y = np.arange(W)
         X, Y = np.meshgrid(x, y, indexing='ij')
         
-        X = X * self.grid['xbound'][2] + (self.grid['xbound'][2] / 2 + self.grid['xbound'][0])
-        Y = Y * self.grid['ybound'][2] + (self.grid['ybound'][2] / 2 + self.grid['ybound'][0])
+        X = X * self.grid['xbound'][2] + (self.grid['xbound'][2] / 2 + (2 * self.grid['xbound'][0]))
+        Y = Y * self.grid['ybound'][2] + (self.grid['ybound'][2] / 2 + (2 * self.grid['ybound'][0]))
         XY = np.stack([X, Y, np.zeros_like(X), np.ones_like(X)]) # [H, W, 4]
         XY = XY.reshape(4, -1)  # [4, H*W]
         
@@ -578,9 +582,34 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
             y = idx // W
             x = idx % W
             positional_semantic[:, y, x] = self.pose_conditions[key][0]
+                
+        return positional_semantic
+            
+        
+    
+    def _generate_positional_semantic_map(
+        self,
+        bev_aug: np.ndarray = np.eye(4),
+    ) -> torch.Tensor:
+        """Crop and transform the positional semantic map based on the BEV augmentation.
+        Args:
+            channels (int): Number of channels for the positional semantic map.
+            bev_aug (np.ndarray): Augmentation matrix moving the bev. Impacts the BEV.
+
+        Returns:
+            torch.Tensor: Positional semantic map.
+        """
+        # Alias
+        h, w = 2*self.nx[0], 2*self.nx[1]
+
+        # Initialize
+        positional_semantic_aug = torch.zeros_like(self.full_pos_semantic_map)
+
+        # Are augmentations activated ?
+        bool_aug_activated = not np.allclose(bev_aug, np.eye(4))
 
         # flattened_positional_semantic = positional_semantic.view(channels, -1).T  # [H*W, C]
-        positional_semantic_aug = positional_semantic.clone()
+        positional_semantic_aug = self.full_pos_semantic_map.clone()
         
         if bool_aug_activated:
             # Method 1: aug in 3d space            
@@ -612,9 +641,16 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
                 shear=0
             )
 
-                        
+        size_filter = (self.nx[0] // 2, self.nx[1] // 2)
+        positional_semantic = self.full_pos_semantic_map[
+            :, size_filter[0] : -size_filter[0], size_filter[1] : -size_filter[1]
+        ]
+        positional_semantic_aug = positional_semantic_aug[
+            :, size_filter[0] : -size_filter[0], size_filter[1] : -size_filter[1]
+        ]
+
         return positional_semantic, positional_semantic_aug
-        
+
     def _get_outputs_bev(
         self,
         bev_records_T: List[Tuple[int, int]],
