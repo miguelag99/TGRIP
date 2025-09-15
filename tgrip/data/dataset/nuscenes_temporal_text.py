@@ -525,9 +525,10 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
         channels: int = 512,
     ) -> torch.Tensor:
         """Generate a positional semantic map based on the text conditions.
-        
-        6 regions are defined: front, front_left, front_right, back, back_left, back_right.
-        
+
+        6 regions are defined following nuScenesQA specs:
+            front, front_left, front_right, back, back_left, back_right.
+
         To avoid invalid values with data augmentation, we create the map with double
         extension and then crop it during data loading.
         
