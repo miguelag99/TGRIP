@@ -1,6 +1,7 @@
 import pdb
 from typing import Any, Dict, List, Tuple
 from copy import deepcopy
+from einops import rearrange
 
 import numpy as np
 import numpy.typing as npt
@@ -11,62 +12,11 @@ from .nuscenes_common import (
     SIGMA
 )
 from .nuscenes_temporal import TemporalNuScenesDataset
-from tgrip.utils.geom import get_yawtransfmat_from_mat
-
+from .semantic_data import SCENE_TEXT_CONDITIONS, VEL_THRESHOLD, POSITIONAL_CONDITIONS
+from tgrip.utils.geom import get_yawtransfmat_from_mat, gen_dx_bx
 from tgrip.utils.imgs import prepare_img_axis
-
-# -----------------------#
-# Global Parameters
-# -----------------------#
-VEL_THRESHOLD = 0.5  # m/s
-SCENE_TEXT_CONDITIONS = [
-    # No conditions
-    {
-        "text_conditions": "Predict all vehicles",
-        "keyword": "all",
-    },
-    # Dynamic tags conditions
-    {
-        "text_conditions": "Predict only moving vehicles",
-        "filter_by": "attribute_tokens",
-        "keyword": "moving",
-        "values": ["vehicle.moving", "cycle.with_rider"]
-    },
-    {
-        "text_conditions": "Predict only stopped vehicles",
-        "filter_by": "attribute_tokens",
-        "keyword": "stopped",
-        "values": ["vehicle.stopped", "vehicle.parked", "cycle.without_rider"]
-    },
-    # {
-    #     "text_conditions": "Predict only parked vehicles",
-    #     "filter_by": "attribute_tokens",
-    #     "keyword": "parked",
-    #     "values": ["vehicle.parked", "cycle.without_rider"]
-    # },
-    # Class conditions
-    # {
-    #     "text_conditions": "Predict only cars",
-    #     "filter_by": "category_name",
-    #     "values": "vehicle.car"
-    # },
-    # {
-    #     "text_conditions": "Predict only bicycles",
-    #     "filter_by": "category_name",
-    #     "values": "vehicle.bicycle"
-    # },
-    # {
-    #     "text_conditions": "Predict only trucks",
-    #     "filter_by": "category_name",
-    #     "values": "vehicle.truck"
-    # },
-    # {
-    #     "text_conditions": "Predict only buses",
-    #     "filter_by": "category_name",
-    #     "values": "vehicle.bus"
-    # }
-]
-
+from scipy.spatial.transform import Rotation as R
+from torchvision.transforms.functional import affine
 
 class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
     def __init__(
@@ -86,7 +36,10 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
         keep_input_flow_map: bool = False,
         keep_input_instance_bev: bool = False,
         keep_input_persp: bool = False,
+        keep_input_semantic_maps: bool = True,
         save_folder: bool = "",
+        # Text encoder
+        text_encoder = None,
         *args,
         **kwargs,
     ):
@@ -110,9 +63,28 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
             **kwargs,
         )
         
+        self.text_conditions = SCENE_TEXT_CONDITIONS
+        self.pose_conditions = POSITIONAL_CONDITIONS
         self.keys_to_keep.append("text_condition")
+        if keep_input_semantic_maps:
+            self.keys_to_keep.append("semantic_positional_map")
+            self.keys_to_keep.append("semantic_positional_map_aug")
 
         
+        self.text_encoder = text_encoder.to(
+            'cuda' if torch.cuda.is_available() else 'cpu'
+        )
+        # Embed general text conditions
+        for cond in self.text_conditions:
+            with torch.no_grad():
+                cond['text_embedding'] = self.text_encoder([cond['text_condition']]).cpu()
+
+        for cond in self.pose_conditions:
+            with torch.no_grad():
+                self.pose_conditions[cond] = self.text_encoder([cond]).cpu()
+                        
+        del self.text_encoder # Free memory
+                
     def get_bev_related_data(
         self,
         rec,
@@ -176,7 +148,18 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
         
         # -> Flow map
         flow_map = torch.zeros(2, h, w)
-
+        
+        # -> Semantic maps
+        semantic_positional_map, semantic_positional_map_aug = (
+            torch.zeros(1, h, w),
+            torch.zeros(1, h, w),
+        )
+        if 'semantic_positional_map' in self.keys_to_keep:
+            semantic_positional_map, semantic_positional_map_aug = self._generate_positional_semantic_map(
+                channels=self.text_conditions[0]['text_embedding'].shape[1],
+                bev_aug=bev_aug
+            )
+            
         # Are augmentations activated ?
         bool_aug_activated = not np.allclose(bev_aug, np.eye(4))
 
@@ -237,13 +220,9 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
                     if inst[scene_condition["filter_by"]] not in scene_condition["values"]:
                         continue
             
-            if not self.is_lyft:
-                # Visibility token, used for detection.
-                is_visible = int(inst["visibility_token"]) >= min_vis
-                visible_bbox.append(is_visible)
-            else:
-                is_visible = True
-                visible_bbox.append(True)
+            # Visibility token, used for detection.
+            is_visible = int(inst["visibility_token"]) >= min_vis
+            visible_bbox.append(is_visible)
 
             # Dynamic tag
             if len(inst["attribute_tokens"]) > 0 and (not self.is_lyft):
@@ -471,6 +450,8 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
             lidar_img_aug,
             instance,
             instance_aug,
+            semantic_positional_map,
+            semantic_positional_map_aug,
         ] = [
             prepare_img_axis(x, self.to_cam_ref)
             for x in [
@@ -494,6 +475,8 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
                 lidar_img_aug,
                 instance,
                 instance_aug,
+                semantic_positional_map,
+                semantic_positional_map_aug,
             ]
         ]
 
@@ -527,8 +510,110 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
             "bbox_attr": bbox_attr,
             "bbox_attr_aug": bbox_attr_aug,
             "instance": instance,
-            "instance_aug": instance_aug
+            "instance_aug": instance_aug,
+            "semantic_positional_map": semantic_positional_map,
+            "semantic_positional_map_aug": semantic_positional_map_aug,
         }
+    
+    def _generate_positional_semantic_map(
+        self,
+        channels: int = 512,
+        bev_aug: np.ndarray = np.eye(4),
+    ) -> torch.Tensor:
+        """Generate a positional semantic map based on the text conditions.
+
+        Args:
+            bev_aug (npt.NDArray): Augmentation matrix moving the bev. Impacts the BEV.
+
+        Returns:
+            torch.Tensor: Positional semantic map.
+        """
+        # Alias
+        h, w = self.nx[0], self.nx[1]
+
+        # Initialize
+        positional_semantic = torch.zeros(channels, h, w)
+        positional_semantic_aug = torch.zeros_like(positional_semantic)
+
+        # Are augmentations activated ?
+        bool_aug_activated = not np.allclose(bev_aug, np.eye(4))
+
+        # Create a BEV semantic map filled with positional semantic embeddings
+        H, W = h, w
+        cx, cy = W // 2, H // 2
+        
+        x = np.arange(H)
+        y = np.arange(W)
+        X, Y = np.meshgrid(x, y, indexing='ij')
+        
+        X = X * self.grid['xbound'][2] + (self.grid['xbound'][2] / 2 + self.grid['xbound'][0])
+        Y = Y * self.grid['ybound'][2] + (self.grid['ybound'][2] / 2 + self.grid['ybound'][0])
+        XY = np.stack([X, Y, np.zeros_like(X), np.ones_like(X)]) # [H, W, 4]
+        XY = XY.reshape(4, -1)  # [4, H*W]
+        
+
+        # Fill positional_semantic according to angle θ using real-world coordinates from XY
+        for idx in range(H * W):
+            # XY[:, idx] contains [X, Y, 0, 1] in meters
+            x_m = XY[0, idx]
+            y_m = XY[1, idx]
+
+            theta = np.degrees(np.arctan2(x_m, y_m))  # θ=0 is right (X axis), CCW positive
+
+            if -30 < theta <= 30:
+                key = 'front'
+            elif 30 < theta <= 90:
+                key = 'front_left'
+            elif 90 < theta <= 150:
+                key = 'back_left'
+            elif 150 < theta or theta <= -150:
+                key = 'back'
+            elif -90 < theta <= -30:
+                key = 'front_right'
+            elif -150 < theta <= -90:
+                key = 'back_right'
+            else:
+                key = 'back'
+
+            y = idx // W
+            x = idx % W
+            positional_semantic[:, y, x] = self.pose_conditions[key][0]
+
+        # flattened_positional_semantic = positional_semantic.view(channels, -1).T  # [H*W, C]
+        positional_semantic_aug = positional_semantic.clone()
+        
+        if bool_aug_activated:
+            # Method 1: aug in 3d space            
+            # aug_XY = torch.Tensor(bev_aug @ XY).T[:, :2]  # [H*W, 2]
+            
+            # dx, bx, nx = gen_dx_bx(self.grid['xbound'], self.grid['ybound'], self.grid['zbound'])
+            # bev_aug_XY = (aug_XY - bx[:2] + (dx[:2] / 2.0)) / dx[:2]
+            # # bev_aug_XY[:, 1] = -(bev_aug_XY[:, 1] - H)
+
+            # for idx in range(bev_aug_XY.shape[0]):
+            #     # import pdb; pdb.set_trace()
+            #     x_idx = int(bev_aug_XY[idx, 0])
+            #     y_idx = int(bev_aug_XY[idx, 1])
+            #     if 0 <= x_idx < W and 0 <= y_idx < H:
+            #         positional_semantic_aug[:, x_idx, y_idx] = flattened_positional_semantic[idx]
+            
+            # Method 2: use img transformation
+            # Get rotation angle from bev_aug matrix
+            rot = R.from_matrix(bev_aug[:3, :3])
+            yaw = -rot.as_euler('xyz')[2]  # Rotation around Z axis (yaw)
+            translation = [-int(bev_aug[0, 3]), -int(bev_aug[1, 3])]
+            
+            
+            positional_semantic_aug = affine(
+                positional_semantic_aug,
+                angle=np.degrees(yaw),
+                translate=translation,
+                scale=1.0,
+                shear=0
+            )
+
+                        
+        return positional_semantic, positional_semantic_aug
         
     def _get_outputs_bev(
         self,
@@ -614,9 +699,8 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
 
         # Get bev outputs
         # Randomly select a text condition
-        random_condition = np.random.choice(SCENE_TEXT_CONDITIONS)
-        # random_condition = SCENE_TEXT_CONDITIONS[2]
-        out_dict['text_condition'] = random_condition['text_conditions']
+        random_condition = np.random.choice(self.text_conditions)
+        out_dict['text_condition'] = random_condition['text_condition']
 
         # Get bev outputs with the selected condition
         data_bev, instance_map = self._get_outputs_bev(

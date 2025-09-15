@@ -65,6 +65,7 @@ class NuScenesDatamodule(pl.LightningDataModule):
         keep_input_lidar: bool = False,
         keep_input_flow_map: bool = False,
         keep_input_instance_bev: bool = False,
+        keep_input_semantic_maps: bool = True,
         save_folder: str = "",
         visualise_mode: bool = False,
         # BEV aug
@@ -83,6 +84,8 @@ class NuScenesDatamodule(pl.LightningDataModule):
         to_cam_ref: bool = False,
         random_cam_ref: bool = False,
         force_camref: Optional[int] = None,
+        # Text encoder
+        text_encoder = None,
     ):
         super().__init__()
 
@@ -123,6 +126,7 @@ class NuScenesDatamodule(pl.LightningDataModule):
         self.keep_input_lidar = keep_input_lidar
         self.keep_input_flow_map = keep_input_flow_map
         self.keep_input_instance_bev = keep_input_instance_bev
+        self.keep_input_semantic_maps = keep_input_semantic_maps
         self.save_folder = save_folder
         # Query aug
         self.apply_valid_bev_aug = apply_valid_bev_aug
@@ -140,6 +144,8 @@ class NuScenesDatamodule(pl.LightningDataModule):
         self.to_cam_ref = to_cam_ref
         self.random_cam_ref = random_cam_ref
         self.force_camref = force_camref
+        # Text encoder
+        self.text_encoder = text_encoder
 
         self.cls = eval(cls_tag)
 
@@ -198,9 +204,12 @@ class NuScenesDatamodule(pl.LightningDataModule):
             keep_input_lidar=self.keep_input_lidar,
             keep_input_flow_map=self.keep_input_flow_map,
             keep_input_instance_bev=self.keep_input_instance_bev,
+            keep_input_semantic_maps=self.keep_input_semantic_maps,
             save_folder=self.save_folder,
             # Paths
             hdmaproot=self.hdmaproot,
+            # Text
+            text_encoder=self.text_encoder,
         )
         self.valdata = partial_data(
             # Mode

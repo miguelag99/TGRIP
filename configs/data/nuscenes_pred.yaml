@@ -12,6 +12,10 @@ is_lyft: False
 
 cls_tag: TextConditionedTemporalNuScenesDataset
 
+text_encoder:
+  _target_: tgrip.models.text_encoder.CLIPEncoder
+  model_name: "openai/clip-vit-base-patch32"
+
 # Grid
 grid:
   xbound: [-50.0, 50.0, 0.5]
@@ -70,6 +74,7 @@ keep_input_offsets_map: False
 keep_input_flow_map: True
 keep_input_instance_bev: True
 keep_input_lidar: False
+keep_input_semantic_maps: True
 save_folder: ""
 visualise_mode: False
 
