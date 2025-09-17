@@ -57,6 +57,16 @@ SCENE_TEXT_CONDITIONS = [
     # }
 ]
 
+# 
+VELOCITY_CONDITIONS = {
+    "vehicle.stopped": {"text": "Stopped vehicle"},
+    "vehicle.parked": {"text": "Stopped vehicle"},
+    "cycle.without_rider": {"text": "Stopped vehicle"},
+    "vehicle.moving": {"text": "Moving vehicle"},
+    "cycle.with_rider": {"text": "Moving vehicle"},
+}
+
+# Created inside dataloader
 POSITIONAL_CONDITIONS= {
     'front': None,
     'front_left': None,

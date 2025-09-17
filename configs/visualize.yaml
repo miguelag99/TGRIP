@@ -3,7 +3,7 @@
 defaults:
   - _self_
   - data: nuscenes_pred.yaml
-  - model: BEVPredFormerPredictor.yaml
+  - model: TGRIPPredictor.yaml
   - callbacks: default_pl.yaml
   - plugins: null
   - logger: default_pl.yaml

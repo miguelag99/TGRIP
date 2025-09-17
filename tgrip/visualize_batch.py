@@ -115,8 +115,11 @@ def visualise(cfg: DictConfig) -> None:
             ax.axis('off')
 
             # Add timestep indicator to figure title
-            frame_fig.suptitle(f"Scene: {scene_id} (Timestep {t+1}/{num_timesteps}), {x['text_condition']}")
-            
+            txt_cond = x['text_condition'] if 'text_condition' in x else ''
+            frame_fig.suptitle(
+                f"Scene: {scene_id} (Timestep {t+1}/{num_timesteps}), {txt_cond}"
+            )
+
             # Convert figure to image
             canvas = FigureCanvas(frame_fig)
             canvas.draw()
@@ -128,21 +131,23 @@ def visualise(cfg: DictConfig) -> None:
             # Close the figure to free memory
             plt.close(frame_fig)
         
-        if 'all' in x['text_condition']:
-            condition = 'all'
+        if 'text_condition' not in x:
+            condition = ''
+        elif 'all' in x['text_condition']:
+            condition = '_all'
         elif 'moving' in x['text_condition']:
-            condition = 'moving'
+            condition = '_moving'
         elif 'stopped' in x['text_condition']:
-            condition = 'stopped'
-        
+            condition = '_stopped'
+
         # Save as GIF
         imageio.imwrite(
-            output_path / f"scene_{scene_id}_animation_{condition}.gif",
+            output_path / f"scene_{scene_id}_animation{condition}.gif",
             frames,
             duration=2000,
         )  # 2 seconds per frame (in ms)
         log.info(
-            f"GIF animation saved to {output_path / f'/scene_{scene_id}_animation_{condition}.gif'}"
+            f"GIF animation saved to {output_path / f'/scene_{scene_id}_animation{condition}.gif'}"
         )
 
         plt.close(fig)

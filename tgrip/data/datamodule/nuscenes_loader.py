@@ -86,6 +86,7 @@ class NuScenesDatamodule(pl.LightningDataModule):
         force_camref: Optional[int] = None,
         # Text encoder
         text_encoder = None,
+        apply_text_filter: bool = True
     ):
         super().__init__()
 
@@ -146,6 +147,7 @@ class NuScenesDatamodule(pl.LightningDataModule):
         self.force_camref = force_camref
         # Text encoder
         self.text_encoder = text_encoder
+        self.apply_text_filter = apply_text_filter
 
         self.cls = eval(cls_tag)
 
@@ -210,6 +212,7 @@ class NuScenesDatamodule(pl.LightningDataModule):
             hdmaproot=self.hdmaproot,
             # Text
             text_encoder=self.text_encoder,
+            apply_text_filter=self.apply_text_filter,
         )
         self.valdata = partial_data(
             # Mode
