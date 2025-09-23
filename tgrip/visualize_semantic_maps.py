@@ -62,6 +62,8 @@ def pruebas(cfg: DictConfig) -> None:
     out_sem_pos_aug = x['semantic_positional_map_aug'] # b t c h w
     out_sem_vel = x['semantic_speed_map'] # b t c h w
     out_sem_vel_aug = x['semantic_speed_map_aug'] # b t c h w
+    out_sem_cls = x['semantic_class_map'] # b t c h w
+    out_sem_cls_aug = x['semantic_class_map_aug'] # b t c h w
 
     t = 1
     fig, axs = plt.subplots(2, 7, figsize=(32, 16))
@@ -135,7 +137,21 @@ def pruebas(cfg: DictConfig) -> None:
         label="Cosine Similarity (0-1)",
     )
 
-    # Semantic velocity map (PCA)
+    # GT
+    axs[1, 0].imshow(
+        generate_gt_instance_pred(
+            cfg.data.grid,
+            batch={
+                "binimg_aug": x["binimg_aug"][0],
+                "flow_map_aug": x["flow_map_aug"][0],
+                "centerness_aug": x["centerness_aug"][0],
+            },
+        )
+    )
+    axs[1, 0].set_title('Instance pred gt')
+    axs[1, 0].axis('off')
+
+    # Semantic velocity map
     b, _, c, h, w = out_sem_vel.shape
     vis_img = torch.zeros((h * w, 3))
     rearranged = rearrange(out_sem_vel[0, t], "c h w -> (h w) c").cpu()
@@ -153,11 +169,11 @@ def pruebas(cfg: DictConfig) -> None:
 
     vis_img = vis_img.view(h, w, 3).cpu()
 
-    axs[1, 0].imshow(vis_img)
-    axs[1, 0].set_title("Semantic Velocity")
-    axs[1, 0].axis("off")
+    axs[1, 1].imshow(vis_img)
+    axs[1, 1].set_title("Semantic Velocity")
+    axs[1, 1].axis("off")
         
-    # Augmented semantic velocity map (PCA)
+    # Augmented semantic velocity map
     b, _, c, h, w = out_sem_vel_aug.shape
     vis_img = torch.zeros((h * w, 3))
     rearranged = rearrange(out_sem_vel_aug[0, t], "c h w -> (h w) c").cpu()
@@ -174,24 +190,52 @@ def pruebas(cfg: DictConfig) -> None:
         
     vis_img = vis_img.view(h, w, 3).cpu()
 
-    axs[1, 1].imshow(vis_img)
-    axs[1, 1].set_title("Augmented Semantic Velocity")
-    axs[1, 1].axis("off")
-
-    # GT
-    axs[1, 2].imshow(
-        generate_gt_instance_pred(
-            cfg.data.grid,
-            batch={
-                "binimg_aug": x["binimg_aug"][0],
-                "flow_map_aug": x["flow_map_aug"][0],
-                "centerness_aug": x["centerness_aug"][0],
-            },
-        )
-    )
-    axs[1, 2].set_title('Instance pred gt')
-    axs[1, 2].axis('off')
+    axs[1, 2].imshow(vis_img)
+    axs[1, 2].set_title("Augmented Semantic Velocity")
+    axs[1, 2].axis("off")
     
+    # Semantic class map
+    b, _, c, h, w = out_sem_cls.shape
+    vis_img = torch.zeros((h * w, 3))
+    rearranged = rearrange(out_sem_cls[0, t], "c h w -> (h w) c").cpu()
+    valid_mask = rearranged[:, 0] != 0
+    
+    unique_vals, inverse_indices = torch.unique(rearranged, dim=0, return_inverse=True)
+    colors = matplotlib.colormaps['tab20'].resampled(unique_vals.shape[0])
+    for idx, color in enumerate(colors.colors):
+        mask = (inverse_indices == idx)
+        if torch.all(unique_vals[idx] == 0):
+            vis_img[mask] = torch.tensor([0.0, 0.0, 0.0])
+        else:
+            vis_img[mask] = torch.tensor(color[:3]).float() # RGB only, ignore alpha if present
+
+    vis_img = vis_img.view(h, w, 3).cpu()
+
+    axs[1, 3].imshow(vis_img)
+    axs[1, 3].set_title("Semantic Class")
+    axs[1, 3].axis("off")
+    
+    # Semantic class map augmented
+    b, _, c, h, w = out_sem_cls_aug.shape
+    vis_img = torch.zeros((h * w, 3))
+    rearranged = rearrange(out_sem_cls_aug[0, t], "c h w -> (h w) c").cpu()
+    valid_mask = rearranged[:, 0] != 0
+    
+    unique_vals, inverse_indices = torch.unique(rearranged, dim=0, return_inverse=True)
+    colors = matplotlib.colormaps['tab20'].resampled(unique_vals.shape[0])
+    for idx, color in enumerate(colors.colors):
+        mask = (inverse_indices == idx)
+        if torch.all(unique_vals[idx] == 0):
+            vis_img[mask] = torch.tensor([0.0, 0.0, 0.0])
+        else:
+            vis_img[mask] = torch.tensor(color[:3]).float() # RGB only, ignore alpha if present
+    
+    vis_img = vis_img.view(h, w, 3).cpu()
+    
+    axs[1, 4].imshow(vis_img)
+    axs[1, 4].set_title("Augmented Semantic Class")
+    axs[1, 4].axis("off")
+
     plt.savefig("augmentation_vis.png", bbox_inches='tight', pad_inches=0)
     plt.close(fig)
 
