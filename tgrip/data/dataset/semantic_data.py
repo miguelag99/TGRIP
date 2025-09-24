@@ -1,23 +1,23 @@
 VEL_THRESHOLD = 0.5  # m/s
 SCENE_TEXT_CONDITIONS = [
     # No conditions
-    # {
-    #     "text_condition": "All vehicles",
-    #     "keyword": "all",
-    # },
+    {
+        "text_condition": "All vehicles",
+        "keyword": "all",
+    },
     # Dynamic tags conditions
-    {
-        "text_condition": "Moving vehicle",
-        "filter_by": "attribute_tokens",
-        "keyword": "moving",
-        "values": ["vehicle.moving", "cycle.with_rider"]
-    },
-    {
-        "text_condition": "Stopped vehicle",
-        "filter_by": "attribute_tokens",
-        "keyword": "stopped",
-        "values": ["vehicle.stopped", "vehicle.parked", "cycle.without_rider"]
-    },
+    # {
+    #     "text_condition": "Moving vehicle",
+    #     "filter_by": "attribute_tokens",
+    #     "keyword": "moving",
+    #     "values": ["vehicle.moving", "cycle.with_rider"]
+    # },
+    # {
+    #     "text_condition": "Stopped vehicle",
+    #     "filter_by": "attribute_tokens",
+    #     "keyword": "stopped",
+    #     "values": ["vehicle.stopped", "vehicle.parked", "cycle.without_rider"]
+    # },
     # {
     #     "text_condition": "Parked vehicle",
     #     "filter_by": "attribute_tokens",
@@ -67,11 +67,16 @@ VELOCITY_CONDITIONS = {
 }
 
 CLASS_CONDITIONS = {
-    "vehicle.car": {"text": "Car"},
     "vehicle.bicycle": {"text": "Bicycle"},
-    "vehicle.truck": {"text": "Truck"},
-    "vehicle.bus": {"text": "Bus"},
+    "vehicle.bus.bendy": {"text": "Bus"},
+    "vehicle.bus.rigid": {"text": "Bus"},
+    "vehicle.car": {"text": "Car"},
+    "vehicle.construction": {"text": "Construction Vehicle"},
+    "vehicle.emergency.ambulance": {"text": "Ambulance"},
+    "vehicle.emergency.police": {"text": "Police Car"},
+    "vehicle.motorcycle": {"text": "Motorcycle"},
     "vehicle.trailer": {"text": "Trailer"},
+    "vehicle.truck": {"text": "Truck"},
 }
 
 POSITIONAL_CONDITIONS= {

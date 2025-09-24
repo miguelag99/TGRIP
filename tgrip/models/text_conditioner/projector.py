@@ -1,6 +1,4 @@
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from einops import rearrange
 
@@ -74,10 +72,9 @@ class SemanticProjector(nn.Module):
 
         self.register_forward_hook(debug_hook)
 
-    def forward(self, bev_feats, text_feat):
+    def forward(self, bev_feats):
         """
         bev_feats: [B, T, C, H, W]
-        text_feat: [B, text_dim]
         returns: [B, text_dim, H, W] — alineated BEV features
         """
         B, T, C, H, W = bev_feats.shape

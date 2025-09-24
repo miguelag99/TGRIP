@@ -156,6 +156,7 @@ def visualise(cfg: DictConfig) -> None:
 def generate_gt_instance_pred(
     bev_bounds: DictConfig,
     batch: Dict,
+    plot_ego: bool = False,
 ) -> np.ndarray:
     # Bird's-eye view parameters
     bev_resolution = torch.tensor(
@@ -210,17 +211,18 @@ def generate_gt_instance_pred(
     mask = ~ np.all(trajectory_img == 0, axis=2)
     vis_image[mask] = temp_img[mask]
     
-    # Plot ego pose at the center of the image with cv2 circle       
-    pts = np.array([[EGO_DIMS[1]/2, EGO_DIMS[0]/2],
-                    [EGO_DIMS[1]/2, -EGO_DIMS[0]/2],
-                    [-EGO_DIMS[1]/2, -EGO_DIMS[0]/2],
-                    [-EGO_DIMS[1]/2, EGO_DIMS[0]/2]])
+    # Plot ego pose at the center of the image with cv2 circle
+    if plot_ego:  
+        pts = np.array([[EGO_DIMS[1]/2, EGO_DIMS[0]/2],
+                        [EGO_DIMS[1]/2, -EGO_DIMS[0]/2],
+                        [-EGO_DIMS[1]/2, -EGO_DIMS[0]/2],
+                        [-EGO_DIMS[1]/2, EGO_DIMS[0]/2]])
 
-    pts = np.round(
-        (pts - bev_start_position[:2] + bev_resolution[:2] / 2.0) / bev_resolution[:2]
-    ).astype(np.int32)
-    vis_image = cv2.fillPoly(vis_image, [pts], (0, 0, 0))
-    vis_image =cv2.cvtColor(vis_image, cv2.COLOR_RGB2BGR)
+        pts = np.round(
+            (pts - bev_start_position[:2] + bev_resolution[:2] / 2.0) / bev_resolution[:2]
+        ).astype(np.int32)
+        vis_image = cv2.fillPoly(vis_image, [pts], (0, 0, 0))
+        vis_image =cv2.cvtColor(vis_image, cv2.COLOR_RGB2BGR)
     return vis_image
 
 

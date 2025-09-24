@@ -56,6 +56,7 @@ def pruebas(cfg: DictConfig) -> None:
         if isinstance(v, torch.Tensor):
             x[k] = v.to(device)
     
+    imgs = x['imgs'] # b t 6 c h w
     out_seg = x['binimg'] # b t 1 h w
     out_seg_aug = x['binimg_aug'] # b t 1 h w
     out_sem_pos = x['semantic_positional_map'] # b t c h w
@@ -66,7 +67,7 @@ def pruebas(cfg: DictConfig) -> None:
     out_sem_cls_aug = x['semantic_class_map_aug'] # b t c h w
 
     t = 1
-    fig, axs = plt.subplots(2, 7, figsize=(32, 16))
+    fig, axs = plt.subplots(3, 6, figsize=(40, 20))
 
     # Binary segmentation
     axs[0, 0].imshow(out_seg[0, t, 0].cpu().numpy(), cmap='gray')
@@ -118,16 +119,6 @@ def pruebas(cfg: DictConfig) -> None:
     axs[0, 5].set_title('Sim. with back_right')
     axs[0, 5].axis('off')
 
-    # Similarity with different texts
-    semantic_score_random = cos(
-        out_sem_pos_aug[0, t].permute(1, 2, 0),
-        model.net.text_encoder(["patata"])
-    )
-    im_random = axs[0, 6].imshow(semantic_score_random.cpu().numpy(), cmap='coolwarm',
-                                 vmin=vmin, vmax=vmax)
-    axs[0, 6].set_title('Sim. with random text patata')
-    axs[0, 6].axis('off')
-
     # Common colorbar for all similarities
     fig.colorbar(
         im_front,
@@ -146,6 +137,7 @@ def pruebas(cfg: DictConfig) -> None:
                 "flow_map_aug": x["flow_map_aug"][0],
                 "centerness_aug": x["centerness_aug"][0],
             },
+            plot_ego=False,
         )
     )
     axs[1, 0].set_title('Instance pred gt')
@@ -235,6 +227,21 @@ def pruebas(cfg: DictConfig) -> None:
     axs[1, 4].imshow(vis_img)
     axs[1, 4].set_title("Augmented Semantic Class")
     axs[1, 4].axis("off")
+    
+    # Clear axs[1, 5]
+    axs[1, 5].cla()
+    axs[1, 5].axis('off')
+
+    
+    # Plot images from different cameras in last row
+    cam_names = ['CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT',
+                 'CAM_BACK_LEFT', 'CAM_BACK', 'CAM_BACK_RIGHT']
+    
+    for i in range(6):
+        img = imgs[0, t, i].permute(1, 2, 0).cpu().numpy()
+        axs[2, i].imshow(img)
+        axs[2, i].set_title(cam_names[i])
+        axs[2, i].axis('off')
 
     plt.savefig("augmentation_vis.png", bbox_inches='tight', pad_inches=0)
     plt.close(fig)
