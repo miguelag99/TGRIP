@@ -1,7 +1,8 @@
 import cv2
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Union
 from copy import deepcopy
 from einops import rearrange
+import time
 
 import numpy as np
 import numpy.typing as npt
@@ -21,7 +22,7 @@ from tgrip.utils.geom import (
 )
 from tgrip.utils.imgs import prepare_img_axis
 from scipy.spatial.transform import Rotation as R
-from torchvision.transforms.functional import affine
+from torchvision.transforms.v2.functional import affine
 
 THRESHOLD_VALID_CENTERNESS = 0.1
 
@@ -44,6 +45,8 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
         keep_input_instance_bev: bool = False,
         keep_input_persp: bool = False,
         keep_input_semantic_maps: bool = True,
+        return_separate_semantic_maps: bool = False,
+        semantic_bev_fuser: str = "mean",
         save_folder: bool = "",
         # Text encoder
         text_encoder = None,
@@ -90,20 +93,28 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
                 cond['text_embedding'] = self.text_encoder([cond['text_condition']])
         
         self.keep_input_semantic_maps = keep_input_semantic_maps
+        self.return_separate_semantic_maps = return_separate_semantic_maps
         if keep_input_semantic_maps:
-            self.keys_to_keep.append("semantic_positional_map")
-            self.keys_to_keep.append("semantic_positional_map_aug")
-            self.keys_to_keep.append("semantic_speed_map")
-            self.keys_to_keep.append("semantic_speed_map_aug")
-            self.keys_to_keep.append("semantic_class_map")
-            self.keys_to_keep.append("semantic_class_map_aug")
+            self.semantic_bev_fuser = semantic_bev_fuser
+            if self.return_separate_semantic_maps:
+                self.keys_to_keep.append("semantic_positional_map")
+                self.keys_to_keep.append("semantic_positional_map_aug")
+                self.keys_to_keep.append("semantic_speed_map")
+                self.keys_to_keep.append("semantic_speed_map_aug")
+                self.keys_to_keep.append("semantic_class_map")
+                self.keys_to_keep.append("semantic_class_map_aug")
+            
+            if self.semantic_bev_fuser is not None:
+                self.keys_to_keep.append("mixed_semantic_map")
+                self.keys_to_keep.append("mixed_semantic_map_aug")
 
             ## Semantic maps
             # Create text embeddings for conditions
             for cond in self.pose_conditions:
                 with torch.no_grad():
-                    self.pose_conditions[cond] = self.text_encoder([cond])
-
+                    self.pose_conditions[cond] = self.text_encoder(
+                        [cond]
+                    ).detach().cpu()
             self.full_pos_semantic_map = self._init_positional_semantic_map(
                 channels=self.text_conditions[0]['text_embedding'].shape[1],
             )
@@ -112,12 +123,13 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
                 with torch.no_grad():
                     self.velocity_conditions[status]['embedding'] = self.text_encoder(
                         [self.velocity_conditions[status]['text']]
-                    )
+                    ).detach().cpu()
+
             for cls in self.class_conditions:
                 with torch.no_grad():
                     self.class_conditions[cls]['embedding'] = self.text_encoder(
                         [self.class_conditions[cls]['text']]
-                    )
+                    ).detach().cpu()
 
         del self.text_encoder # Free memory
                 
@@ -181,10 +193,7 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
         # -> Bounding boxes
         bboxes, bboxes_aug = {}, {}
         visible_bbox = []
-        
-        # -> Flow map
-        flow_map = torch.zeros(2, h, w)
-        
+                
         # -> Semantic maps
         txt_embed_dim = self.text_conditions[0]['text_embedding'].shape[1]
         
@@ -193,7 +202,7 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
             torch.zeros(txt_embed_dim, h, w),
             torch.zeros(txt_embed_dim, h, w),
         )
-        if 'semantic_positional_map' in self.keys_to_keep:
+        if self.keep_input_semantic_maps:
             semantic_positional_map, semantic_positional_map_aug = (
                 self._generate_positional_semantic_map(bev_aug=bev_aug)
             )
@@ -214,7 +223,7 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
         bool_aug_activated = not np.allclose(bev_aug, np.eye(4))
 
         egopose_token = self.nusc.get("sample_data", rec["data"]["LIDAR_TOP"])[
-            f"ego_pose_token"
+            "ego_pose_token"
         ]
         inst_egopose = self.nusc.get("ego_pose", egopose_token)
         # https://forum.nuscenes.org/t/dimensions-of-the-ego-vehicle-used-to-gather-data/550
@@ -598,6 +607,32 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
             ]
         ]
 
+        # If specified, fuse the semantic maps
+        if self.keep_input_semantic_maps and self.semantic_bev_fuser:
+            if self.semantic_bev_fuser == "mean":
+                mixed_semantic = torch.zeros_like(semantic_class_map)
+                mixed_semantic_aug = torch.zeros_like(semantic_class_map_aug)
+                for sem_map, sem_map_aug in [
+                    (semantic_positional_map, semantic_positional_map_aug),
+                    (semantic_speed_map, semantic_speed_map_aug),
+                    (semantic_class_map, semantic_class_map_aug),
+                ]:
+                    mixed_semantic += sem_map
+                    mixed_semantic_aug += sem_map_aug
+                mixed_semantic /= 3.0
+                mixed_semantic_aug /= 3.0
+    
+            else:
+                raise ValueError(
+                    f"Unknown fusion method {self.semantic_bev_fuser} for semantic maps."
+                )
+        else:
+            mixed_semantic, mixed_semantic_aug = (
+                torch.zeros_like(semantic_class_map),
+                torch.zeros_like(semantic_class_map_aug),
+            )
+
+
         return {
             "binimg": binimg,
             "binimg_aug": binimg_aug,
@@ -635,6 +670,8 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
             "semantic_speed_map_aug": semantic_speed_map_aug,
             "semantic_class_map": semantic_class_map,
             "semantic_class_map_aug": semantic_class_map_aug,
+            "mixed_semantic_map": mixed_semantic,
+            "mixed_semantic_map_aug": mixed_semantic_aug,
         }
     
     def _init_positional_semantic_map(
@@ -720,9 +757,6 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
         # Alias
         h, w = 2*self.nx[0], 2*self.nx[1]
 
-        # Initialize
-        positional_semantic_aug = torch.zeros_like(self.full_pos_semantic_map)
-
         # Are augmentations activated ?
         bool_aug_activated = not np.allclose(bev_aug, np.eye(4))
 
@@ -782,7 +816,7 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
         
         mask = np.zeros(semantic_map.shape[1:], dtype=np.uint8)
         cv2.fillConvexPoly(mask, poly_region_img_rd, 1)
-        semantic_map[:, mask == 1] = text_embedding.unsqueeze(-1).to(semantic_map.device)
+        semantic_map[:, mask == 1] = text_embedding.unsqueeze(-1)
 
         return semantic_map
 
@@ -810,12 +844,15 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
 
         for i, rec in enumerate(bev_records_T):
             tokens.append(rec["token"])
+            t1 = time.time()
             out_bev_dict = self.get_bev_related_data(
                 rec=rec,
                 egoPout_to_global=egoPout_to_global[i],
                 bev_aug=bev_aug[i],  # from query to query aug.
                 scene_condition=condition,
             )
+            t2 = time.time()
+            print("Time BEV processing: ", t2-t1)
 
             out_bev_dict.update({"tokens": tokens})
 

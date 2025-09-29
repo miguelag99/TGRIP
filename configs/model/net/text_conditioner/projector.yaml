@@ -1,0 +1,12 @@
+defaults:
+  - _self_
+
+_target_: tgrip.models.text_conditioner.SemanticProjector
+
+bev_dim: ${model.net.out_c.query_gen}
+past_frames: ${model.net.in_seq_len}
+text_dim: 512 # CLIP text encoder output dimension
+hidden_dim: 256
+n_hidden_layers: 3
+kernel_size: 1
+stride: 1

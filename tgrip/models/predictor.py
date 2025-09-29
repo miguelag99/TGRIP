@@ -103,7 +103,7 @@ class TGRIPPredictor(Network):
         intrins,
         bev_aug,
         egoTin_to_seq,
-        text_condition,
+        text_condition=None,
         **kwargs,
     ):
         (

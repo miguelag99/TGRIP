@@ -3,6 +3,7 @@ from torchmetrics.metric import Metric
 
 from .segmentation import IoUMetric, IntersectionOverUnion
 from .temporal import PanopticMetric
+from .semantic import CosineSimilarityMetric
 
 
 class MeanMetric(Metric):

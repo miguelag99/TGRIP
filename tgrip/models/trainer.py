@@ -15,8 +15,10 @@ from torch.cuda import max_memory_allocated, max_memory_reserved
 
 from tgrip.data.dataset.nuscenes_common import (MAP_DYNAMIC_TAG,
                                                    VISIBILITY_TAG)
-from tgrip.loss import BCELoss, CELoss, SpatialLoss, Weighting
-from tgrip.metric import IoUMetric, MeanMetric, IntersectionOverUnion, PanopticMetric
+from tgrip.loss import BCELoss, CELoss, SpatialLoss, CosineSimilarityLoss, Weighting
+from tgrip.metric import (
+    IoUMetric, MeanMetric, IntersectionOverUnion, PanopticMetric, CosineSimilarityMetric
+)
 from tgrip.utils import (GeomScaler, nested_dict_to_nested_module_dict,
                             prepare_to_log_binimg, prepare_to_log_hdmap,
                             print_nested_dict, predict_instance_segmentation)
@@ -166,6 +168,10 @@ class PredictionTrainer(LightningModule):
             dict_metrics.update({"metric_vpq": PanopticMetric(
                 n_classes=n_c,
             )})
+            
+        # -> Cosine similarity for semantic map
+        if self.with_semantic_map:
+            dict_metrics.update({"metric_cosine_similarity": CosineSimilarityMetric()})
 
         # ---> Training and validation metrics
         if metric_kwargs.get("only_val", True):
@@ -232,6 +238,16 @@ class PredictionTrainer(LightningModule):
                     "flow": SpatialLoss(norm=1.5, ignore_index=255.0),
                 }
             )
+
+        # -> Semantic map loss
+        self.with_semantic_map = loss_kwargs.get("with_semantic_map", False)
+        if self.with_semantic_map:
+            dict_losses["bev"].update(
+                {
+                    "semantic_similarity": CosineSimilarityLoss(),
+                }
+            )
+        
         return dict_losses
 
     @rank_zero_only
@@ -456,6 +472,24 @@ class PredictionTrainer(LightningModule):
             name = f"bev/{l_key}"
             losses.update({name: loss})
             total_loss = update_total_loss(total_loss, loss, name)
+            
+        # -> Semantic similarity
+        for l_key, pred_key, target_key, l_bool in zip(
+            ["semantic_similarity"],
+            ["semantic_bev"],
+            ["mixed_semantic_map"],
+            [self.with_semantic_map],
+        ):
+            if not l_bool:
+                continue
+            l_bev_loss = bev_losses[l_key]
+            l_preds = preds[pred_key]
+            l_targets = batch[target_key][:,1]  # Only present
+            
+            loss = l_bev_loss(l_preds, l_targets)
+            name = f"bev/{l_key}"
+            losses.update({name: loss})
+            total_loss = update_total_loss(total_loss, loss, name)
         
         return losses, total_loss / len(losses)
 
@@ -562,6 +596,14 @@ class PredictionTrainer(LightningModule):
                 metric.update(
                     pred_instance_seg[:,1:],
                     batch["instance"][:,1:].squeeze(2).long()
+                )
+                
+        if ("mixed_semantic_map" in batch.keys()):
+            if hasattr(self, f"metric_cosine_similarity_{mode}"):
+                metric = getattr(self, f"metric_cosine_similarity_{mode}")
+                metric.update(
+                    preds["semantic_bev"],
+                    batch["mixed_semantic_map"][:,1]    # Only present
                 )
 
     def _init_preds_dict_for_vis(self, preds):
@@ -771,6 +813,18 @@ class PredictionTrainer(LightningModule):
                  f"{mode}/sq_metric": sq_score,
                  f"{mode}/rq_metric": rq_score
                 },
+                step=self.current_epoch,
+            )
+
+        # Semantic maps
+        if hasattr(self, f"metric_cosine_similarity_{mode}"):
+            metric = getattr(self, f"metric_cosine_similarity_{mode}")
+            cos_sim = metric.compute().item()
+            metric.reset()
+            log_dict[f"{mode}_bev_metric_cosine_similarity"] = cos_sim
+            self._wrap_loggers(
+                "log_metrics",
+                {f"{mode}/bev/metric_cosine_similarity": cos_sim},
                 step=self.current_epoch,
             )
         

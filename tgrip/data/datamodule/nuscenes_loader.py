@@ -66,6 +66,8 @@ class NuScenesDatamodule(pl.LightningDataModule):
         keep_input_flow_map: bool = False,
         keep_input_instance_bev: bool = False,
         keep_input_semantic_maps: bool = True,
+        return_separate_semantic_maps: bool = False,
+        semantic_bev_fuser: str = "mean",
         save_folder: str = "",
         visualise_mode: bool = False,
         # BEV aug
@@ -128,6 +130,8 @@ class NuScenesDatamodule(pl.LightningDataModule):
         self.keep_input_flow_map = keep_input_flow_map
         self.keep_input_instance_bev = keep_input_instance_bev
         self.keep_input_semantic_maps = keep_input_semantic_maps
+        self.return_separate_semantic_maps = return_separate_semantic_maps
+        self.semantic_bev_fuser = semantic_bev_fuser
         self.save_folder = save_folder
         # Query aug
         self.apply_valid_bev_aug = apply_valid_bev_aug
@@ -207,6 +211,8 @@ class NuScenesDatamodule(pl.LightningDataModule):
             keep_input_flow_map=self.keep_input_flow_map,
             keep_input_instance_bev=self.keep_input_instance_bev,
             keep_input_semantic_maps=self.keep_input_semantic_maps,
+            return_separate_semantic_maps=self.return_separate_semantic_maps,
+            semantic_bev_fuser=self.semantic_bev_fuser,
             save_folder=self.save_folder,
             # Paths
             hdmaproot=self.hdmaproot,
