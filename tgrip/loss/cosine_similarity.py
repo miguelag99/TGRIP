@@ -23,15 +23,16 @@ class CosineSimilarityLoss(LossInterface):
             pred (torch.Tensor): BEV semantic features of shape [B, C, H, W].
             gt (torch.Tensor): BEV semantic gt features of shape [B, C, H, W].
         """
+                
+        preds = rearrange(preds, 'b c h w -> b (h w) c')
+        targets = rearrange(targets, 'b c h w -> b (h w) c')
+
+        mask = (targets.abs().sum(dim=-1) != 0)  # [B, H*W]
 
         # Normalize embeddings along channel dimension
-        preds = F.normalize(preds, dim=1)
-        targets = F.normalize(targets, dim=1)
-        
-        loss = 1 - F.cosine_similarity(
-            rearrange(preds, 'b c h w -> b (h w) c'),
-            rearrange(targets, 'b c h w -> b (h w) c'),
-            dim=1
-        ).mean()
+        preds = F.normalize(preds[mask], dim=1)
+        targets = F.normalize(targets[mask], dim=1)
+
+        loss = 1 - F.cosine_similarity(preds, targets, dim=1).mean()
     
         return loss
