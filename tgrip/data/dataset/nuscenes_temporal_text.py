@@ -544,6 +544,11 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
             curr_semantic_positional_map_aug = semantic_positional_map_aug * (
                 binimg_aug.float()
             )
+        else:
+            curr_semantic_positional_map = torch.zeros_like(semantic_positional_map)
+            curr_semantic_positional_map_aug = torch.zeros_like(
+                semantic_positional_map_aug
+            )
 
         # Change axes: space: (X: bottom, Y: right) -> image: (X: right, Y: bottom)
         [
