@@ -19,13 +19,16 @@ class CosineSimilarityMetric(Metric):
         # preds, target: [B, C, H, W]
         assert preds.shape == target.shape, "preds and target should have the same shape"
         
-        # Normalize embeddings along channel dimension
-        preds = F.normalize(preds, dim=1)
-        target = F.normalize(target, dim=1)
-
-        # Compute cosine similarity for each cell → [B, H, W]
         preds = rearrange(preds, 'b c h w -> b (h w) c')
         target = rearrange(target, 'b c h w -> b (h w) c')
+
+        mask = (target.abs().sum(dim=-1) != 0)  # [B, H*W]
+        
+        # Normalize embeddings along channel dimension
+        preds = F.normalize(preds[mask], dim=1)
+        target = F.normalize(target[mask], dim=1)
+
+        # Compute cosine similarity for each cell → [B, H, W]
         cos = F.cosine_similarity(preds, target, dim=1)
 
         # Accumulate sum of similarities and total count
