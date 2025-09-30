@@ -795,7 +795,7 @@ class PredictionTrainer(LightningModule):
                 step=self.current_epoch,
             )
 
-        log_dict["mean_metrics"] = sum([v for v in log_dict.values()]) / len(log_dict)
+        # log_dict["mean_metrics"] = sum([v for v in log_dict.values()]) / len(log_dict)
         
         # VPQ metric
         if hasattr(self, f"metric_vpq_{mode}"):
