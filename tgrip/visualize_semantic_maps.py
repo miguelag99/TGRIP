@@ -21,7 +21,7 @@ from tgrip.visualize_batch import generate_gt_instance_pred
 log = utils.get_pylogger(__name__)
 
 
-def pruebas(cfg: DictConfig) -> None:
+def visualize(cfg: DictConfig) -> None:
     if cfg.get("seed"):
         L.seed_everything(cfg.seed, workers=True)
 
@@ -55,16 +55,71 @@ def pruebas(cfg: DictConfig) -> None:
     for k, v in x.items():
         if isinstance(v, torch.Tensor):
             x[k] = v.to(device)
+            
+    # Fill semantic maps with true text embeddings
+    bs = x['semantic_positional_map'].shape[0]
+    bev_h, bev_w = x['semantic_positional_map'].shape[-2:]
+    tout = x['semantic_positional_map'].shape[1]
+    text_dim = datamodule.pose_conditions["front"]["embedding"].shape[1]
+    device = x['semantic_positional_map'].device
+
+    # Positional maps
+    final_semantics = {}
+    semantic_map_configs = [
+        ("positional", "semantic_positional_map", "pose_conditions"),
+        ("velocity", "semantic_speed_map", "velocity_conditions"),
+        ("class", "semantic_class_map", "class_conditions"),
+    ]
+
+    for semantic_type, map_key, cond_key in semantic_map_configs:
+        base_shape = (bs, tout, text_dim, bev_h, bev_w)
+        dtype = torch.float16
+        final_semantics[semantic_type] = torch.zeros(
+            base_shape, device=device, dtype=dtype
+        )
+        final_semantics[semantic_type + "_aug"] = torch.zeros_like(
+            final_semantics[semantic_type]
+        )
+
+        conditions = getattr(datamodule, cond_key)
+        for k, v in conditions.items():
+            idx = v["idx"]
+            embedding = v["embedding"].to(dtype).to(device)
+            embedding_expanded = embedding.view(1, 1, -1, 1, 1)
+
+            mask = (x[map_key] == idx).to(device)
+            mask_aug = (x[map_key + "_aug"] == idx).to(device)
+            mask_expanded = mask.expand(
+                -1, -1, embedding_expanded.shape[2], -1, -1
+            )
+            mask_aug_expanded = mask_aug.expand_as(mask_expanded)
+
+            final_semantics[semantic_type] = torch.where(
+                mask_expanded,
+                embedding_expanded,
+                final_semantics[semantic_type],
+            )
+            final_semantics[semantic_type + "_aug"] = torch.where(
+                mask_aug_expanded,
+                embedding_expanded,
+                final_semantics[semantic_type + "_aug"],
+            )
     
     imgs = x['imgs'] # b t 6 c h w
     out_seg = x['binimg'] # b t 1 h w
-    out_seg_aug = x['binimg_aug'] # b t 1 h w
-    out_sem_pos = x['semantic_positional_map'] # b t c h w
-    out_sem_pos_aug = x['semantic_positional_map_aug'] # b t c h w
-    out_sem_vel = x['semantic_speed_map'] # b t c h w
-    out_sem_vel_aug = x['semantic_speed_map_aug'] # b t c h w
-    out_sem_cls = x['semantic_class_map'] # b t c h w
-    out_sem_cls_aug = x['semantic_class_map_aug'] # b t c h w
+    out_seg_aug = x['binimg_aug']  # b t 1 h w
+    out_sem_pos, out_sem_pos_aug = (
+        final_semantics["positional"],
+        final_semantics["positional_aug"],
+    )
+    out_sem_vel, out_sem_vel_aug = (
+        final_semantics["velocity"],
+        final_semantics["velocity_aug"],
+    )
+    out_sem_cls, out_sem_cls_aug = (
+        final_semantics["class"],
+        final_semantics["class_aug"],
+    )
 
     t = 1
     fig, axs = plt.subplots(3, 6, figsize=(40, 20))
@@ -112,11 +167,11 @@ def pruebas(cfg: DictConfig) -> None:
     # Similarity with different texts
     semantic_score_back_right = cos(
         out_sem_pos_aug[0, t].permute(1, 2, 0),
-        model.net.text_encoder(["back_right"])
+        model.net.text_encoder(["Back Right"])
     )
     im_back_right = axs[0, 5].imshow(semantic_score_back_right.cpu().numpy(), cmap='coolwarm',
                                      vmin=vmin, vmax=vmax)
-    axs[0, 5].set_title('Sim. with back_right')
+    axs[0, 5].set_title('Sim. with Back Right')
     axs[0, 5].axis('off')
 
     # Common colorbar for all similarities
@@ -251,7 +306,7 @@ def pruebas(cfg: DictConfig) -> None:
 @hydra.main(version_base="1.3", config_path="../configs", config_name="val.yaml")
 def main(cfg: DictConfig) -> Optional[float]:
     utils.modif_config_based_on_flags(cfg)
-    pruebas(cfg)
+    visualize(cfg)
 
 
 

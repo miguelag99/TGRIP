@@ -75,8 +75,6 @@ keep_input_flow_map: True
 keep_input_instance_bev: True
 keep_input_lidar: False
 keep_input_semantic_maps: True
-semantic_bev_fuser: "mean"
-return_separate_semantic_maps: False # Visualise separate semantic maps (not recommended for train)
 apply_text_filter: False
 save_folder: ""
 visualise_mode: False

@@ -45,8 +45,6 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
         keep_input_instance_bev: bool = False,
         keep_input_persp: bool = False,
         keep_input_semantic_maps: bool = True,
-        return_separate_semantic_maps: bool = False,
-        semantic_bev_fuser: str = "mean",
         save_folder: bool = "",
         # Text encoder
         text_encoder = None,
@@ -93,40 +91,33 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
                 cond['text_embedding'] = self.text_encoder([cond['text_condition']])
         
         self.keep_input_semantic_maps = keep_input_semantic_maps
-        self.return_separate_semantic_maps = return_separate_semantic_maps
         if keep_input_semantic_maps:
-            self.semantic_bev_fuser = semantic_bev_fuser
-            if self.return_separate_semantic_maps:
-                self.keys_to_keep.append("semantic_positional_map")
-                self.keys_to_keep.append("semantic_positional_map_aug")
-                self.keys_to_keep.append("semantic_speed_map")
-                self.keys_to_keep.append("semantic_speed_map_aug")
-                self.keys_to_keep.append("semantic_class_map")
-                self.keys_to_keep.append("semantic_class_map_aug")
-            
-            if self.semantic_bev_fuser is not None:
-                self.keys_to_keep.append("mixed_semantic_map")
-                self.keys_to_keep.append("mixed_semantic_map_aug")
+            self.keys_to_keep.append("semantic_positional_map")
+            self.keys_to_keep.append("semantic_positional_map_aug")
+            self.keys_to_keep.append("semantic_speed_map")
+            self.keys_to_keep.append("semantic_speed_map_aug")
+            self.keys_to_keep.append("semantic_class_map")
+            self.keys_to_keep.append("semantic_class_map_aug")
 
             ## Semantic maps
             # Create text embeddings for conditions
             for cond in self.pose_conditions:
                 with torch.no_grad():
-                    self.pose_conditions[cond] = self.text_encoder(
-                        [cond]
-                    ).detach().cpu()
+                    self.pose_conditions[cond]['embedding'] = self.text_encoder(
+                        [self.pose_conditions[cond]['text']]
+                    ).detach().cpu().half()
             
             for status in self.velocity_conditions:
                 with torch.no_grad():
                     self.velocity_conditions[status]['embedding'] = self.text_encoder(
                         [self.velocity_conditions[status]['text']]
-                    ).detach().cpu()
+                    ).detach().cpu().half()
 
             for cls in self.class_conditions:
                 with torch.no_grad():
                     self.class_conditions[cls]['embedding'] = self.text_encoder(
                         [self.class_conditions[cls]['text']]
-                    ).detach().cpu()
+                    ).detach().cpu().half()
 
         del self.text_encoder # Free memory
                 
@@ -196,20 +187,20 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
         
         ## Positional semantic map
         semantic_positional_map, semantic_positional_map_aug = (
-            torch.zeros(txt_embed_dim, h, w, dtype=torch.float16),
-            torch.zeros(txt_embed_dim, h, w, dtype=torch.float16),
+            torch.zeros(1, h, w, dtype=torch.uint8),
+            torch.zeros(1, h, w, dtype=torch.uint8),
         )
         
         ## Movement semantic map
         semantic_speed_map, semantic_speed_map_aug = (
-            torch.zeros(txt_embed_dim, h, w, dtype=torch.float16),
-            torch.zeros(txt_embed_dim, h, w, dtype=torch.float16),
+            torch.zeros(1, h, w, dtype=torch.uint8),
+            torch.zeros(1, h, w, dtype=torch.uint8),
         )
 
         ## Class semantic map
         semantic_class_map, semantic_class_map_aug = (
-            torch.zeros(txt_embed_dim, h, w, dtype=torch.float16),
-            torch.zeros(txt_embed_dim, h, w, dtype=torch.float16),
+            torch.zeros(1, h, w, dtype=torch.uint8),
+            torch.zeros(1, h, w, dtype=torch.uint8),
         )
 
         # Are augmentations activated ?
@@ -327,9 +318,9 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
                     )["name"]
                     embed_vel = self.velocity_conditions.get(status, None)
                     embed_vel = (
-                        embed_vel["embedding"].squeeze(0).half()
+                        torch.tensor(embed_vel["idx"])
                         if embed_vel is not None
-                        else None
+                        else torch.zeros(1, dtype=torch.uint8)
                     )
                     semantic_speed_map = self._process_semantic_bev_region(
                         bbox_img, semantic_speed_map, embed_vel
@@ -339,9 +330,9 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
                 cat_name = inst["category_name"]
                 embed_cls = self.class_conditions.get(cat_name, None)
                 embed_cls = (
-                    embed_cls["embedding"].squeeze(0).half()
+                    torch.tensor(embed_cls["idx"])
                     if embed_cls is not None
-                    else torch.zeros(txt_embed_dim, dtype=torch.float16)
+                    else torch.zeros(1, dtype=torch.uint8)
                 )
                 semantic_class_map = self._process_semantic_bev_region(
                     bbox_img, semantic_class_map, embed_cls
@@ -367,11 +358,11 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
                     key = 'back_right'
                 else:
                     key = 'back'
-                embed_pos = self.pose_conditions.get(key, None)[0]
+                embed_pos = self.pose_conditions.get(key, None)
                 embed_pos = (
-                    embed_pos.half()
+                    torch.tensor(embed_pos["idx"])
                     if embed_pos is not None
-                    else torch.zeros(txt_embed_dim, dtype=torch.float16)
+                    else torch.zeros(1, dtype=torch.uint8)
                 )
                 semantic_positional_map = self._process_semantic_bev_region(
                     bbox_img, semantic_positional_map, embed_pos
@@ -627,32 +618,6 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
             ]
         ]
 
-        # If specified, fuse the semantic maps
-        if self.keep_input_semantic_maps and self.semantic_bev_fuser:
-            if self.semantic_bev_fuser == "mean":
-                mixed_semantic = torch.zeros_like(semantic_class_map)
-                mixed_semantic_aug = torch.zeros_like(semantic_class_map_aug)
-                for sem_map, sem_map_aug in [
-                    (semantic_positional_map, semantic_positional_map_aug),
-                    (semantic_speed_map, semantic_speed_map_aug),
-                    (semantic_class_map, semantic_class_map_aug),
-                ]:
-                    mixed_semantic += sem_map
-                    mixed_semantic_aug += sem_map_aug
-                mixed_semantic /= 3.0
-                mixed_semantic_aug /= 3.0
-    
-            else:
-                raise ValueError(
-                    f"Unknown fusion method {self.semantic_bev_fuser} for semantic maps."
-                )
-        else:
-            mixed_semantic, mixed_semantic_aug = (
-                torch.zeros_like(semantic_class_map),
-                torch.zeros_like(semantic_class_map_aug),
-            )
-
-
         return {
             "binimg": binimg,
             "binimg_aug": binimg_aug,
@@ -684,14 +649,12 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
             "bbox_attr_aug": bbox_attr_aug,
             "instance": instance,
             "instance_aug": instance_aug,
-            "semantic_positional_map": semantic_positional_map.half(),
-            "semantic_positional_map_aug": semantic_positional_map_aug.half(),
-            "semantic_speed_map": semantic_speed_map.half(),
-            "semantic_speed_map_aug": semantic_speed_map_aug.half(),
-            "semantic_class_map": semantic_class_map.half(),
-            "semantic_class_map_aug": semantic_class_map_aug.half(),
-            "mixed_semantic_map": mixed_semantic.half(),
-            "mixed_semantic_map_aug": mixed_semantic_aug.half(),
+            "semantic_positional_map": semantic_positional_map,
+            "semantic_positional_map_aug": semantic_positional_map_aug,
+            "semantic_speed_map": semantic_speed_map,
+            "semantic_speed_map_aug": semantic_speed_map_aug,
+            "semantic_class_map": semantic_class_map,
+            "semantic_class_map_aug": semantic_class_map_aug,
         }
     
     def _process_semantic_bev_region(

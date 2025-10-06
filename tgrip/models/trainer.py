@@ -13,15 +13,23 @@ from lightning.pytorch.utilities.rank_zero import rank_zero_only
 from torch import Tensor
 from torch.cuda import max_memory_allocated, max_memory_reserved
 
-from tgrip.data.dataset.nuscenes_common import (MAP_DYNAMIC_TAG,
-                                                   VISIBILITY_TAG)
+from tgrip.data.dataset.nuscenes_common import MAP_DYNAMIC_TAG, VISIBILITY_TAG
 from tgrip.loss import BCELoss, CELoss, SpatialLoss, CosineSimilarityLoss, Weighting
 from tgrip.metric import (
-    IoUMetric, MeanMetric, IntersectionOverUnion, PanopticMetric, CosineSimilarityMetric
+    IoUMetric,
+    MeanMetric,
+    IntersectionOverUnion,
+    PanopticMetric,
+    CosineSimilarityMetric,
 )
-from tgrip.utils import (GeomScaler, nested_dict_to_nested_module_dict,
-                            prepare_to_log_binimg, prepare_to_log_hdmap,
-                            print_nested_dict, predict_instance_segmentation)
+from tgrip.utils import (
+    GeomScaler,
+    nested_dict_to_nested_module_dict,
+    prepare_to_log_binimg,
+    prepare_to_log_hdmap,
+    print_nested_dict,
+    predict_instance_segmentation,
+)
 
 
 class PredictionTrainer(LightningModule):
@@ -284,10 +292,79 @@ class PredictionTrainer(LightningModule):
     def on_train_start(self):
         self._wrap_loggers("log_hyperparams", self.hparams)
 
+    def _fill_semantic_maps(self, batch, bs):
+        """Fill semantic maps with true CLIP embeds instead of indices.
+        The process is done on GPU to avoid large memory usage in CPU RAM.
+        This method also mixes the different semantic maps into one."""
+        
+        bev_h, bev_w = batch["semantic_positional_map"].shape[-2:]
+        tout = batch["semantic_positional_map"].shape[1]
+        text_dim = self.trainer.datamodule.pose_conditions["front"]["embedding"].shape[
+            1
+        ]
+        device = batch["semantic_positional_map"].device
+
+        # Positional maps
+        final_semantics = {}
+        semantic_map_configs = [
+            ("positional", "semantic_positional_map", "pose_conditions"),
+            ("velocity", "semantic_speed_map", "velocity_conditions"),
+            ("class", "semantic_class_map", "class_conditions"),
+        ]
+
+        for semantic_type, map_key, cond_key in semantic_map_configs:
+            base_shape = (bs, tout, text_dim, bev_h, bev_w)
+            dtype = torch.float16
+            final_semantics[semantic_type] = torch.zeros(
+                base_shape, device=device, dtype=dtype
+            )
+            final_semantics[semantic_type + "_aug"] = torch.zeros_like(
+                final_semantics[semantic_type]
+            )
+
+            conditions = getattr(self.trainer.datamodule, cond_key)
+            for k, v in conditions.items():
+                idx = v["idx"]
+                embedding = v["embedding"].to(dtype).to(device)
+                embedding_expanded = embedding.view(1, 1, -1, 1, 1)
+
+                mask = (batch[map_key] == idx).to(device)
+                mask_aug = (batch[map_key + "_aug"] == idx).to(device)
+                mask_expanded = mask.expand(-1, -1, embedding_expanded.shape[2], -1, -1)
+                mask_aug_expanded = mask_aug.expand_as(mask_expanded)
+
+                final_semantics[semantic_type] = torch.where(
+                    mask_expanded,
+                    embedding_expanded,
+                    final_semantics[semantic_type],
+                )
+                final_semantics[semantic_type + "_aug"] = torch.where(
+                    mask_aug_expanded,
+                    embedding_expanded,
+                    final_semantics[semantic_type + "_aug"],
+                )
+
+        # Fuse all semantic maps (using mean, could be changed)
+        batch["mixed_semantic_map"] = (
+            final_semantics["positional"]
+            + final_semantics["velocity"]
+            + final_semantics["class"]
+        ) / 3
+
+        batch["mixed_semantic_map_aug"] = (
+            final_semantics["positional_aug"]
+            + final_semantics["velocity_aug"]
+            + final_semantics["class_aug"]
+        ) / 3
+        
     # Process
     def common_step(self, batch, step, mode="train", batch_idx=None):
         """Common step: prepare inputs, forward pass, compute losses and metrics."""
         bs = batch['imgs'].shape[0]
+        # # Create final semantic maps directly in GPU if needed
+        if self.trainer.datamodule.keep_input_semantic_maps:
+            self._fill_semantic_maps(batch, bs)
+        
         # Augmentations:
         # Change reference and consider the augmented BEV as GT.
         if mode == "train":
