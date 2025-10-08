@@ -59,6 +59,7 @@ SCENE_TEXT_CONDITIONS = [
 
 # Conditions used for semantic maps are filled in dataloader using CLIP embeddings
 VELOCITY_CONDITIONS = {
+    "background": {"text": "Background", "idx": 0},
     "vehicle.stopped": {"text": "Stopped", "idx": 1},
     "vehicle.parked": {"text": "Stopped", "idx": 2},
     "cycle.without_rider": {"text": "Stopped", "idx": 3},
@@ -67,6 +68,7 @@ VELOCITY_CONDITIONS = {
 }
 
 CLASS_CONDITIONS = {
+    "background": {"text": "Background", "idx": 0},
     "vehicle.bicycle": {"text": "Bicycle", "idx": 1},
     "vehicle.bus.bendy": {"text": "Bus", "idx": 2},
     "vehicle.bus.rigid": {"text": "Bus", "idx": 3},
@@ -80,6 +82,7 @@ CLASS_CONDITIONS = {
 }
 
 POSITIONAL_CONDITIONS= {
+    'background': {"text": "Background", "idx": 0},
     'front': {"text": "Front", "idx": 1},
     'front_left': {"text": "Front Left", "idx": 2},
     'front_right': {"text": "Front Right", "idx": 3},
