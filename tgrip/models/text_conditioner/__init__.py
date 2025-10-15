@@ -1,3 +1,3 @@
 from .attention import TextCrossAttention
 from .film import MultiFiLMModulation
-from .projector import SemanticProjector
+from .clip_fuser import SemanticProjector, CLIPSemanticFuser

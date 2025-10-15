@@ -1,8 +1,78 @@
+import torch
 import torch.nn as nn
 
 from einops import rearrange
 
 from tgrip.utils.debug import debug_hook
+    
+class CLIPSemanticFuser(nn.Module):
+    """
+    Module focused on fusing BEV features with text embeddings using cross-attention.
+    First, a semantic projector maps from BEV feature space to text embedding space.
+    Then, cross-attention is applied to fuse the two modalities and filter the BEV features
+    """
+    def __init__(
+        self,
+        embed_dim=512,
+        bev_dim=128,
+        num_heads=8,
+        mlp_dim=256,
+        past_frames=3,
+        projector_layers=1,
+    ):
+        super().__init__()
+        self.semantic_projector = SemanticProjector(
+            bev_dim=bev_dim,
+            past_frames=past_frames,
+            text_dim=embed_dim,
+            hidden_dim=mlp_dim,
+            n_hidden_layers=projector_layers,
+            kernel_size=1,
+            stride=1,
+        )
+        self.cross_attn = nn.MultiheadAttention(
+            embed_dim=embed_dim,
+            num_heads=num_heads,
+            batch_first=True,
+        )
+        self.final_fuser = nn.Conv2d(
+            in_channels=bev_dim+1,
+            out_channels=bev_dim,
+            kernel_size=1,
+            stride=1
+        )
+
+
+    def forward(self, bev_feats, text_embed):
+        """
+        BEV past features: [B, T, C, H, W]
+        text_embed: CLIP embedding [B, N_text, D]
+        
+        If multiple text embeddings are provided, attention weights are averaged.
+        
+        Returns:
+        semantic_bev: [B, D, H, W] — BEV features projected to text embedding space
+        final_feats: [B, T, C, H, W] — BEV features fused with text attention scores
+        """
+        B, T, C, H, W = bev_feats.shape
+        semantic_bev = self.semantic_projector(bev_feats)  # [B, D, H, W]
+
+        bev_flat = semantic_bev.flatten(2).permute(0, 2, 1)  # [B, N, D], N = H*W
+        text_q, attn_weights = self.cross_attn(
+            query=text_embed, key=bev_flat, value=bev_flat
+        )
+        
+        # Fuse attention weights for different text tokens by averaging
+        text_score = attn_weights.mean(1, keepdims=True).view(B, 1, H, W)  # [B, H, W]
+        text_score = text_score.unsqueeze(1)  # [B, 1, 1, H, W]
+        text_score = text_score.expand(-1, T, 1, -1, -1)  # [B, T, 1, H, W]
+        
+        final_feats = self.final_fuser(
+            torch.cat([bev_feats, text_score], dim=2).view(B*T, C+1, H, W)
+        )
+        final_feats = final_feats.view(B, T, -1, H, W)
+        
+        return semantic_bev, final_feats
     
 class SemanticProjector(nn.Module):
     def __init__(

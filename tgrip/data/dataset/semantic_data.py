@@ -6,18 +6,18 @@ SCENE_TEXT_CONDITIONS = [
         "keyword": "all",
     },
     # Dynamic tags conditions
-    # {
-    #     "text_condition": "Moving vehicle",
-    #     "filter_by": "attribute_tokens",
-    #     "keyword": "moving",
-    #     "values": ["vehicle.moving", "cycle.with_rider"]
-    # },
-    # {
-    #     "text_condition": "Stopped vehicle",
-    #     "filter_by": "attribute_tokens",
-    #     "keyword": "stopped",
-    #     "values": ["vehicle.stopped", "vehicle.parked", "cycle.without_rider"]
-    # },
+    {
+        "text_condition": "Moving",
+        "filter_by": "attribute_tokens",
+        "keyword": "moving",
+        "values": ["vehicle.moving", "cycle.with_rider"]
+    },
+    {
+        "text_condition": "Stopped",
+        "filter_by": "attribute_tokens",
+        "keyword": "stopped",
+        "values": ["vehicle.stopped", "vehicle.parked", "cycle.without_rider"]
+    },
     # {
     #     "text_condition": "Parked vehicle",
     #     "filter_by": "attribute_tokens",
@@ -25,36 +25,36 @@ SCENE_TEXT_CONDITIONS = [
     #     "values": ["vehicle.parked", "cycle.without_rider"]
     # },
     # Class conditions
-    # {
-    #     "text_condition": "Car",
-    #     "filter_by": "category_name",
-    #     "keyword": "category",
-    #     "values": "vehicle.car"
-    # },
-    # {
-    #     "text_condition": "Bicycle",
-    #     "filter_by": "category_name",
-    #     "keyword": "category",
-    #     "values": "vehicle.bicycle"
-    # },
-    # {
-    #     "text_condition": "Truck",
-    #     "filter_by": "category_name",
-    #     "keyword": "category",
-    #     "values": "vehicle.truck"
-    # },
-    # {
-    #     "text_condition": "Bus",
-    #     "filter_by": "category_name",
-    #     "keyword": "category",
-    #     "values": "vehicle.bus"
-    # },
-    # {
-    #     "text_condition": "Trailer",
-    #     "filter_by": "category_name",
-    #     "keyword": "category",
-    #     "values": "vehicle.trailer"
-    # }
+    {
+        "text_condition": "Car",
+        "filter_by": "category_name",
+        "keyword": "category",
+        "values": "vehicle.car"
+    },
+    {
+        "text_condition": "Bicycle",
+        "filter_by": "category_name",
+        "keyword": "category",
+        "values": "vehicle.bicycle"
+    },
+    {
+        "text_condition": "Truck",
+        "filter_by": "category_name",
+        "keyword": "category",
+        "values": "vehicle.truck"
+    },
+    {
+        "text_condition": "Bus",
+        "filter_by": "category_name",
+        "keyword": "category",
+        "values": ["vehicle.bus.bendy", "vehicle.bus.rigid"]
+    },
+    {
+        "text_condition": "Trailer",
+        "filter_by": "category_name",
+        "keyword": "category",
+        "values": "vehicle.trailer"
+    }
 ]
 
 # Conditions used for semantic maps are filled in dataloader using CLIP embeddings

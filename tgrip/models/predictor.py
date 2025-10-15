@@ -163,8 +163,10 @@ class TGRIPPredictor(Network):
         # Temporal
         bev_query = self.forward_temporal(bev_query)
         
-        if self.text_conditioner is not None:
-            semantic_bev = self.text_conditioner(bev_query)
+        if self.text_conditioner is not None and self.text_encoder is not None:
+            # For now, one condition per batch
+            text_embed = self.text_encoder(text_condition).unsqueeze(1)  # [b, 1, text_dim]
+            semantic_bev, bev_query = self.text_conditioner(bev_query, text_embed)
         else:
             semantic_bev = None
 
