@@ -56,16 +56,20 @@ class CLIPSemanticFuser(nn.Module):
         """
         B, T, C, H, W = bev_feats.shape
         semantic_bev = self.semantic_projector(bev_feats)  # [B, D, H, W]
-
-        bev_flat = semantic_bev.flatten(2).permute(0, 2, 1)  # [B, N, D], N = H*W
-        text_q, attn_weights = self.cross_attn(
-            query=text_embed, key=bev_flat, value=bev_flat
-        )
         
-        # Fuse attention weights for different text tokens by averaging
-        text_score = attn_weights.mean(1, keepdims=True).view(B, 1, H, W)  # [B, H, W]
-        text_score = text_score.unsqueeze(1)  # [B, 1, 1, H, W]
-        text_score = text_score.expand(-1, T, 1, -1, -1)  # [B, T, 1, H, W]
+        if text_embed is not None:
+            bev_flat = semantic_bev.flatten(2).permute(0, 2, 1)  # [B, N, D], N = H*W
+            text_q, attn_weights = self.cross_attn(
+                query=text_embed, key=bev_flat, value=bev_flat
+            )
+            
+            # Fuse attention weights for different text tokens by averaging
+            text_score = attn_weights.mean(1, keepdims=True).view(B, 1, H, W)  # [B, H, W]
+            text_score = text_score.unsqueeze(1)  # [B, 1, 1, H, W]
+            text_score = text_score.expand(-1, T, 1, -1, -1)  # [B, T, 1, H, W]
+        else:
+            text_score = torch.ones(B, T, 1, H, W, device=bev_feats.device)
+            # If no text condition is provided, assume uniform attention over the BEV space
         
         final_feats = self.final_fuser(
             torch.cat([bev_feats, text_score], dim=2).view(B*T, C+1, H, W)
