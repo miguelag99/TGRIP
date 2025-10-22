@@ -29,6 +29,10 @@ class CosineSimilarityLoss(LossInterface):
 
         mask = (targets.abs().sum(dim=-1) != 0)  # [B, H*W]
 
+        # Ensure tensors are floating point (normalize requires float or complex)
+        preds = preds.float()
+        targets = targets.float()
+
         # Normalize embeddings along channel dimension
         preds = F.normalize(preds[mask], dim=1)
         targets = F.normalize(targets[mask], dim=1)

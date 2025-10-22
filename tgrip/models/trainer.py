@@ -373,6 +373,22 @@ class PredictionTrainer(LightningModule):
             final_semantics['complex_semantic_map']
         )
         
+        # Collect all unique texts from complex_semantic_data
+        unique_texts = set()
+        for b in range(bs):
+            for t in range(tout):
+                complex_semantic_data = batch['complex_semantic_data'][b][t]
+                for text in complex_semantic_data.keys():
+                    unique_texts.add(text)
+        
+        # Perform text encoder inference once for all unique texts
+        text_to_embedding = {}
+        
+        for text in unique_texts:
+            embedding = self.text_encoder(text).to(dtype).to(device)
+            text_to_embedding[text] = embedding
+        
+        # Now fill the complex semantic maps using cached embeddings
         for b in range(bs):
             for t in range(tout):
                 complex_semantic_data = batch['complex_semantic_data'][b][t]
@@ -381,7 +397,7 @@ class PredictionTrainer(LightningModule):
 
                 for text, v in complex_semantic_data.items():
                     idx = v['id'].to(device)
-                    embedding = self.text_encoder(text).to(dtype).to(device)
+                    embedding = text_to_embedding[text]
                     embedding_expanded = embedding.view(-1, 1, 1)
 
                     mask = (complex_semantic_map == idx).to(device)
