@@ -384,11 +384,14 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
                 # Combination of all semantic attributes
                 if (
                     self.class_conditions.get(cat_name, None)["idx"] != 0
-                    and self.velocity_conditions.get(status, None)["idx"] != 0
                     and self.pose_conditions.get(key, None)["idx"] != 0
                 ):
                     cls = self.class_conditions.get(cat_name, None)
-                    vel = self.velocity_conditions.get(status, None)
+                    vel = (
+                        self.velocity_conditions.get(status, None)
+                        if len(inst["attribute_tokens"]) > 0
+                        else {"text": ""}
+                    )
                     pos = self.pose_conditions.get(key, None)
                     semantic_state = f'{vel["text"]} {cls["text"]} in the {pos["text"]}'
 
@@ -437,7 +440,6 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
                     # Combination of all semantic attributes
                     if (
                         self.class_conditions.get(cat_name, None)["idx"] != 0
-                        and self.velocity_conditions.get(status, None)["idx"] != 0
                         and self.pose_conditions.get(key, None)["idx"] != 0
                     ):
                         complex_semantic_map_aug = self._process_semantic_bev_region(
