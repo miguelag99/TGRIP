@@ -366,11 +366,11 @@ class PredictionTrainer(LightningModule):
         ) / 3
         
         # Complex semantic maps
-        final_semantics['complex_semantic'] = torch.zeros(
+        final_semantics['complex_semantic_map'] = torch.zeros(
             (bs, tout, text_dim, bev_h, bev_w), device=device, dtype=dtype
         )
-        final_semantics['complex_semantic_aug'] = torch.zeros_like(
-            final_semantics['complex_semantic']
+        final_semantics['complex_semantic_map_aug'] = torch.zeros_like(
+            final_semantics['complex_semantic_map']
         )
         
         for b in range(bs):
@@ -388,15 +388,15 @@ class PredictionTrainer(LightningModule):
                     mask_aug = (complex_semantic_map_aug == idx).to(device)
                     mask_expanded = mask.expand(embedding_expanded.shape[0], -1, -1)
                     mask_aug_expanded = mask_aug.expand_as(mask_expanded)
-                    final_semantics['complex_semantic'][b, t] = torch.where(
+                    final_semantics['complex_semantic_map'][b, t] = torch.where(
                         mask_expanded,
                         embedding_expanded,
-                        final_semantics['complex_semantic'][b, t]
+                        final_semantics['complex_semantic_map'][b, t]
                     )
-                    final_semantics['complex_semantic_aug'][b, t] = torch.where(
+                    final_semantics['complex_semantic_map_aug'][b, t] = torch.where(
                         mask_aug_expanded,
                         embedding_expanded,
-                        final_semantics['complex_semantic_aug'][b, t],
+                        final_semantics['complex_semantic_map_aug'][b, t],
                     )
                         
     # Process
@@ -596,7 +596,7 @@ class PredictionTrainer(LightningModule):
         for l_key, pred_key, target_key, l_bool in zip(
             ["semantic_similarity"],
             ["semantic_bev"],
-            ["mixed_semantic_map"],
+            ["complex_semantic_map"],
             [self.with_semantic_map],
         ):
             if not l_bool:
