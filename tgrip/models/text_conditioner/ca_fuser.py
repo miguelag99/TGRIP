@@ -5,7 +5,7 @@ from einops import rearrange
 
 from tgrip.utils.debug import debug_hook
     
-class CLIPSemanticFuser(nn.Module):
+class CASemanticFuser(nn.Module):
     """
     Module focused on fusing BEV features with text embeddings using cross-attention.
     First, a semantic projector maps from BEV feature space to text embedding space.

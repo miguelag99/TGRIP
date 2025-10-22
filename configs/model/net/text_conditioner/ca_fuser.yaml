@@ -1,9 +1,9 @@
 defaults:
   - _self_
 
-_target_: tgrip.models.text_conditioner.CLIPSemanticFuser
+_target_: tgrip.models.text_conditioner.CASemanticFuser
 
-embed_dim: 512 # CLIP text encoder output dimension
+embed_dim: 384 # text encoder output dimension
 bev_dim: ${model.net.out_c.query_gen}
 num_heads: 8
 mlp_dim: 256

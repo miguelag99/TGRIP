@@ -524,6 +524,7 @@ class TemporalNuScenesDataset(NuScenesDataset):
                         "bboxes",
                         "bboxes_aug",
                         "tokens",
+                        "complex_semantic_data"
                     ]
                     else [data_t[k] for data_t in data_bev]
                 )

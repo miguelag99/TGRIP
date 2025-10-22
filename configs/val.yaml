@@ -41,6 +41,10 @@ flags:
   val_sparse: false
 
 model:
+  text_encoder:
+    _target_: tgrip.models.text_encoder.MiniLMEncoder
+    model_name: "sentence-transformers/all-MiniLM-L6-v2"
+  
   loss_kwargs:
     with_binimg: ${data.keep_input_binimg}
     pos_weight: 2.13

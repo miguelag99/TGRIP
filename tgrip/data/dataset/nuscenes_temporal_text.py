@@ -21,8 +21,6 @@ from tgrip.utils.geom import (
     get_yawtransfmat_from_mat,
 )
 from tgrip.utils.imgs import prepare_img_axis
-from scipy.spatial.transform import Rotation as R
-from torchvision.transforms.v2.functional import affine
 
 THRESHOLD_VALID_CENTERNESS = 0.1
 
@@ -77,9 +75,7 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
         self.text_conditions = SCENE_TEXT_CONDITIONS
         self.class_conditions = CLASS_CONDITIONS
 
-        self.text_encoder = text_encoder.to(
-            'cuda' if torch.cuda.is_available() else 'cpu'
-        )
+        self.text_encoder = text_encoder
         
         self.apply_text_filter = apply_text_filter
         if apply_text_filter:
@@ -98,6 +94,9 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
             self.keys_to_keep.append("semantic_speed_map_aug")
             self.keys_to_keep.append("semantic_class_map")
             self.keys_to_keep.append("semantic_class_map_aug")
+            self.keys_to_keep.append("complex_semantic_map")
+            self.keys_to_keep.append("complex_semantic_map_aug")
+            self.keys_to_keep.append("complex_semantic_data")
 
             ## Semantic maps
             # Create text embeddings for conditions
@@ -202,6 +201,20 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
             torch.zeros(1, h, w, dtype=torch.uint8),
             torch.zeros(1, h, w, dtype=torch.uint8),
         )
+        
+        ## Complex semantic attributes
+        # To avoid calculating all combinations, we return the embedding with its id
+        complex_semantic_data = {
+            "Background": {
+                "id": torch.tensor(0, dtype=torch.uint8),
+            }
+        }
+        complex_semantic_map, complex_semantic_map_aug = (
+            torch.zeros(1, h, w, dtype=torch.uint8),
+            torch.zeros(1, h, w, dtype=torch.uint8),
+        )
+        semantic_idx = 1
+        
 
         # Are augmentations activated ?
         bool_aug_activated = not np.allclose(bev_aug, np.eye(4))
@@ -367,6 +380,30 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
                 semantic_positional_map = self._process_semantic_bev_region(
                     bbox_img, semantic_positional_map, embed_pos
                 )
+                
+                # Combination of all semantic attributes
+                if (
+                    self.class_conditions.get(cat_name, None)["idx"] != 0
+                    and self.velocity_conditions.get(status, None)["idx"] != 0
+                    and self.pose_conditions.get(key, None)["idx"] != 0
+                ):
+                    cls = self.class_conditions.get(cat_name, None)
+                    vel = self.velocity_conditions.get(status, None)
+                    pos = self.pose_conditions.get(key, None)
+                    semantic_state = f'{vel["text"]} {cls["text"]} in the {pos["text"]}'
+
+
+                    if semantic_state not in complex_semantic_data:
+                        complex_semantic_data[semantic_state] = {
+                            "id": torch.tensor(semantic_idx, dtype=torch.uint8),
+                        }
+                        semantic_idx += 1                         
+                    
+                    complex_semantic_map = self._process_semantic_bev_region(
+                        bbox_img, complex_semantic_map,
+                        complex_semantic_data[semantic_state]["id"]
+                    )
+                                       
 
             if bool_aug_activated:
                 (
@@ -396,6 +433,17 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
                     semantic_positional_map_aug = self._process_semantic_bev_region(
                         bbox_aug_img, semantic_positional_map_aug, embed_pos
                     )
+
+                    # Combination of all semantic attributes
+                    if (
+                        self.class_conditions.get(cat_name, None)["idx"] != 0
+                        and self.velocity_conditions.get(status, None)["idx"] != 0
+                        and self.pose_conditions.get(key, None)["idx"] != 0
+                    ):
+                        complex_semantic_map_aug = self._process_semantic_bev_region(
+                            bbox_aug_img, complex_semantic_map_aug,
+                            complex_semantic_data[semantic_state]["id"]
+                        )
 
             if is_ego:
                 continue
@@ -586,6 +634,8 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
             semantic_speed_map_aug,
             semantic_class_map,
             semantic_class_map_aug,
+            complex_semantic_map,
+            complex_semantic_map_aug,
         ] = [
             prepare_img_axis(x, self.to_cam_ref)
             for x in [
@@ -615,6 +665,8 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
                 semantic_speed_map_aug,
                 semantic_class_map,
                 semantic_class_map_aug,
+                complex_semantic_map,
+                complex_semantic_map_aug,
             ]
         ]
 
@@ -655,6 +707,9 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
             "semantic_speed_map_aug": semantic_speed_map_aug,
             "semantic_class_map": semantic_class_map,
             "semantic_class_map_aug": semantic_class_map_aug,
+            "complex_semantic_map": complex_semantic_map,
+            "complex_semantic_map_aug": complex_semantic_map_aug,
+            "complex_semantic_data": complex_semantic_data, 
         }
     
     def _process_semantic_bev_region(

@@ -5,6 +5,7 @@ from typing import Any, Dict
 import hydra
 import torch
 import torch.nn as nn
+import os
 from omegaconf import DictConfig
 from psutil import virtual_memory
 from lightning.pytorch.core import LightningModule
@@ -31,6 +32,7 @@ from tgrip.utils import (
     predict_instance_segmentation,
 )
 
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 class PredictionTrainer(LightningModule):
     def __init__(
@@ -45,6 +47,7 @@ class PredictionTrainer(LightningModule):
         metric_kwargs={},
         temporal_kwargs={},
         grid={"xbound": [], "ybound": [], "zbound": []},
+        text_encoder: nn.Module = None,
         name="",
     ):
         super().__init__()
@@ -64,6 +67,11 @@ class PredictionTrainer(LightningModule):
         dict_metrics = self._init_metric(metric_kwargs)
         self.metric_test = IntersectionOverUnion(
             n_classes = 2,
+        )
+
+        # Text Encoder
+        self.text_encoder = text_encoder.to(
+            "cuda" if torch.cuda.is_available() else "cpu"
         )
 
         # Args
@@ -357,6 +365,40 @@ class PredictionTrainer(LightningModule):
             + final_semantics["class_aug"]
         ) / 3
         
+        # Complex semantic maps
+        final_semantics['complex_semantic'] = torch.zeros(
+            (bs, tout, text_dim, bev_h, bev_w), device=device, dtype=dtype
+        )
+        final_semantics['complex_semantic_aug'] = torch.zeros_like(
+            final_semantics['complex_semantic']
+        )
+        
+        for b in range(bs):
+            for t in range(tout):
+                complex_semantic_data = batch['complex_semantic_data'][b][t]
+                complex_semantic_map = batch['complex_semantic_map'][b, t]
+                complex_semantic_map_aug = batch['complex_semantic_map_aug'][b, t]
+
+                for text, v in complex_semantic_data.items():
+                    idx = v['id'].to(device)
+                    embedding = self.text_encoder(text).to(dtype).to(device)
+                    embedding_expanded = embedding.view(-1, 1, 1)
+
+                    mask = (complex_semantic_map == idx).to(device)
+                    mask_aug = (complex_semantic_map_aug == idx).to(device)
+                    mask_expanded = mask.expand(embedding_expanded.shape[0], -1, -1)
+                    mask_aug_expanded = mask_aug.expand_as(mask_expanded)
+                    final_semantics['complex_semantic'][b, t] = torch.where(
+                        mask_expanded,
+                        embedding_expanded,
+                        final_semantics['complex_semantic'][b, t]
+                    )
+                    final_semantics['complex_semantic_aug'][b, t] = torch.where(
+                        mask_aug_expanded,
+                        embedding_expanded,
+                        final_semantics['complex_semantic_aug'][b, t],
+                    )
+                        
     # Process
     def common_step(self, batch, step, mode="train", batch_idx=None):
         """Common step: prepare inputs, forward pass, compute losses and metrics."""

@@ -13,8 +13,8 @@ is_lyft: False
 cls_tag: TextConditionedTemporalNuScenesDataset
 
 text_encoder:
-  _target_: tgrip.models.text_encoder.CLIPEncoder
-  model_name: "openai/clip-vit-base-patch32"
+  _target_: tgrip.models.text_encoder.MiniLMEncoder
+  model_name: "sentence-transformers/all-MiniLM-L6-v2"
 
 # Grid
 grid:
