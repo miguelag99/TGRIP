@@ -414,7 +414,10 @@ class PredictionTrainer(LightningModule):
                         embedding_expanded,
                         final_semantics['complex_semantic_map_aug'][b, t],
                     )
-                        
+
+        batch['complex_semantic_map'] = final_semantics['complex_semantic_map']
+        batch['complex_semantic_map_aug'] = final_semantics['complex_semantic_map_aug']
+
     # Process
     def common_step(self, batch, step, mode="train", batch_idx=None):
         """Common step: prepare inputs, forward pass, compute losses and metrics."""
@@ -738,7 +741,7 @@ class PredictionTrainer(LightningModule):
                 metric = getattr(self, f"metric_cosine_similarity_{mode}")
                 metric.update(
                     preds["semantic_bev"],
-                    batch["mixed_semantic_map"][:,1]    # Only present
+                    batch["complex_semantic_map"][:,1]    # Only present
                 )
 
     def _init_preds_dict_for_vis(self, preds):
