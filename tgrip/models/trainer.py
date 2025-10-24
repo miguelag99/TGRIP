@@ -72,7 +72,7 @@ class PredictionTrainer(LightningModule):
         # Text Encoder
         self.text_encoder = text_encoder.to(
             "cuda" if torch.cuda.is_available() else "cpu"
-        )
+        ) if text_encoder is not None else None
 
         # Args
         self._print_info(dict_losses, dict_metrics)
