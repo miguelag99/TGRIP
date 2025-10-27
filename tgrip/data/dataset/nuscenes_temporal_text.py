@@ -2,7 +2,6 @@ import cv2
 from typing import Any, Dict, List, Tuple, Union
 from copy import deepcopy
 from einops import rearrange
-import time
 
 import numpy as np
 import numpy.typing as npt
@@ -15,9 +14,6 @@ from .semantic_data import (
     VELOCITY_CONDITIONS, CLASS_CONDITIONS
 )
 from tgrip.utils.geom import (
-    GeomScaler,
-    from_corners_to_chw,
-    gen_dx_bx,
     get_yawtransfmat_from_mat,
 )
 from tgrip.utils.imgs import prepare_img_axis
@@ -80,6 +76,8 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
         self.apply_text_filter = apply_text_filter
         if apply_text_filter:
             self.keys_to_keep.append("text_condition")
+            self.keys_to_keep.append("text_conditioned_binimg")
+            self.keys_to_keep.append("text_conditioned_binimg_aug")
             
         # Embed general text conditions
         for cond in self.text_conditions:
@@ -149,6 +147,10 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
 
         # -> Visibility
         visibility, visibility_aug = np.full((2, h, w), 255, dtype=np.uint8)
+        semantic_visibility, semantic_visibility_aug = (
+            np.full((1, h, w), 255, dtype=np.uint8),
+            np.full((1, h, w), 255, dtype=np.uint8),
+        )
 
         # -> Mobile masks: 0: parked, 1: mobile, 2: stopped, 3: unknown
         mobility, mobility_aug = np.zeros((2, h, w), dtype=np.uint8)
@@ -250,38 +252,6 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
             if not any([cat in inst["category_name"] for cat in self.filters_cat]):
                 continue
             
-            # Text condition filtering
-            # If there is not a scene condition or the keyword is "all", do not filter.
-            if (
-                self.apply_text_filter
-                and scene_condition is not None
-                and scene_condition["keyword"] != "all"
-            ):
-                # If we filter by dynamic tags, we need to check the attribute tokens.
-                if scene_condition.get("keyword") in ["moving", "stopped", "parked"]:
-                    if len(inst["attribute_tokens"]) > 0:
-                        status = self.nusc.get(
-                            "attribute", inst["attribute_tokens"][0]
-                        )["name"]
-                        if status not in scene_condition["values"]:
-                            continue
-                    else:
-                        # If there are no attribute tokens, we can not filter.
-                        continue
-
-                    # Check if the moving objects have a valid velocity.
-                    # Avoid conflict due to the lack of velocity attributes in bycicles.
-                    if scene_condition["keyword"] == "moving":
-                        vel = np.linalg.norm(self.nusc.box_velocity(inst["token"]))
-                        if vel < VEL_THRESHOLD:
-                            continue
-
-                else:
-                    if (inst[scene_condition["filter_by"]]
-                        not in scene_condition["values"]
-                    ):
-                        continue
-
             # Visibility token, used for detection.
             is_visible = int(inst["visibility_token"]) >= min_vis
             visible_bbox.append(is_visible)
@@ -335,7 +305,7 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
                         if embed_vel is not None
                         else torch.zeros(1, dtype=torch.uint8)
                     )
-                    semantic_speed_map = self._process_semantic_bev_region(
+                    semantic_speed_map = self._fill_bev_region(
                         bbox_img, semantic_speed_map, embed_vel
                     )
                 
@@ -347,7 +317,7 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
                     if embed_cls is not None
                     else torch.zeros(1, dtype=torch.uint8)
                 )
-                semantic_class_map = self._process_semantic_bev_region(
+                semantic_class_map = self._fill_bev_region(
                     bbox_img, semantic_class_map, embed_cls
                 )
                 
@@ -377,7 +347,7 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
                     if embed_pos is not None
                     else torch.zeros(1, dtype=torch.uint8)
                 )
-                semantic_positional_map = self._process_semantic_bev_region(
+                semantic_positional_map = self._fill_bev_region(
                     bbox_img, semantic_positional_map, embed_pos
                 )
                 
@@ -402,7 +372,7 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
                         }
                         semantic_idx += 1                         
                     
-                    complex_semantic_map = self._process_semantic_bev_region(
+                    complex_semantic_map = self._fill_bev_region(
                         bbox_img, complex_semantic_map,
                         complex_semantic_data[semantic_state]["id"]
                     )
@@ -423,17 +393,17 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
                 ):
                     # Velocity semantic attribute
                     if len(inst["attribute_tokens"]) > 0:
-                        semantic_speed_map_aug = self._process_semantic_bev_region(
+                        semantic_speed_map_aug = self._fill_bev_region(
                             bbox_aug_img, semantic_speed_map_aug, embed_vel
                         )
                     
                     # Class semantic attribute
-                    semantic_class_map_aug = self._process_semantic_bev_region(
+                    semantic_class_map_aug = self._fill_bev_region(
                         bbox_aug_img, semantic_class_map_aug, embed_cls
                     )
                     
                     # Positional semantic attribute
-                    semantic_positional_map_aug = self._process_semantic_bev_region(
+                    semantic_positional_map_aug = self._fill_bev_region(
                         bbox_aug_img, semantic_positional_map_aug, embed_pos
                     )
 
@@ -442,10 +412,56 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
                         self.class_conditions.get(cat_name, None)["idx"] != 0
                         and self.pose_conditions.get(key, None)["idx"] != 0
                     ):
-                        complex_semantic_map_aug = self._process_semantic_bev_region(
+                        complex_semantic_map_aug = self._fill_bev_region(
                             bbox_aug_img, complex_semantic_map_aug,
                             complex_semantic_data[semantic_state]["id"]
                         )
+
+                        
+            # Text condition filtering
+            # If there is not a scene condition or the keyword is "all", do not filter.
+            if (
+                self.apply_text_filter
+                and scene_condition is not None
+                and scene_condition["keyword"] != "all"
+            ):
+                # If we filter by dynamic tags, we need to check the attribute tokens.
+                if scene_condition.get("keyword") in ["moving", "stopped", "parked"]:
+                    # Check if the moving objects have a valid velocity.
+                    # Avoid conflict due to the lack of velocity attributes in bycicles.
+                    vel = np.linalg.norm(self.nusc.box_velocity(inst["token"]))
+                    vis = int(inst["visibility_token"])
+                    if scene_condition["keyword"] == "moving" and vel < VEL_THRESHOLD:
+                        continue
+                    if len(inst["attribute_tokens"]) > 0:
+                        status = self.nusc.get(
+                            "attribute", inst["attribute_tokens"][0]
+                        )["name"]
+                        if status in scene_condition["values"]:
+                            semantic_visibility = self._fill_bev_region(
+                                bbox_img,
+                                semantic_visibility,
+                                torch.tensor(vis),
+                            )
+                            if bool_aug_activated:
+                                semantic_visibility_aug = self._fill_bev_region(
+                                    bbox_aug_img,
+                                    semantic_visibility_aug,
+                                    torch.tensor(vis),
+                                )
+                else:
+                    if inst[scene_condition["filter_by"]] in scene_condition["values"]:
+                        semantic_visibility = self._fill_bev_region(
+                            bbox_img,
+                            semantic_visibility,
+                            torch.tensor(vis),
+                        )
+                        if bool_aug_activated:
+                            semantic_visibility_aug = self._fill_bev_region(
+                                bbox_aug_img,
+                                semantic_visibility_aug,
+                                torch.tensor(vis),
+                            )
 
             if is_ego:
                 continue
@@ -495,6 +511,7 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
             center_bbox_on_img_aug = deepcopy(center_bbox_on_img)
             # Numpy
             visibility_aug = visibility.copy()
+            semantic_visibility_aug = semantic_visibility.copy()
             mobility_aug = mobility.copy()
             centers_aug = centers.copy()
             bbox_attr_aug = bbox_attr.copy()
@@ -506,6 +523,7 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
             semantic_speed_map_aug = semantic_speed_map.clone()
             semantic_positional_map_aug = semantic_positional_map.clone()
             semantic_class_map_aug = semantic_class_map.clone()
+            complex_semantic_map_aug = complex_semantic_map.clone()
 
         # Can not stack empty list
         if len(centers) > 0:
@@ -573,6 +591,8 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
         (
             visibility,
             visibility_aug,
+            semantic_visibility,
+            semantic_visibility_aug,
             mobility,
             mobility_aug,
             valid_centerness,
@@ -586,6 +606,8 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
             for x in [
                 visibility,
                 visibility_aug,
+                semantic_visibility,
+                semantic_visibility_aug,
                 mobility,
                 mobility_aug,
                 valid_centerness,
@@ -601,7 +623,11 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
         binimg, binimg_aug = [
             torch.floor(1 - x // 255) for x in [visibility, visibility_aug]
         ]
-
+        text_conditioned_binimg, text_conditioned_binimg_aug = [
+            torch.floor(1 - x // 255)
+            for x in [semantic_visibility, semantic_visibility_aug]
+        ]
+        
         # BEV validity.
         valid_binimg = visibility >= min_vis
         valid_binimg_aug = visibility_aug >= min_vis
@@ -620,6 +646,8 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
             centerness_aug,
             binimg,
             binimg_aug,
+            text_conditioned_binimg,
+            text_conditioned_binimg_aug,
             valid_binimg,
             valid_binimg_aug,
             offset_map,
@@ -651,6 +679,8 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
                 centerness_aug,
                 binimg,
                 binimg_aug,
+                text_conditioned_binimg,
+                text_conditioned_binimg_aug,
                 valid_binimg,
                 valid_binimg_aug,
                 offset_map,
@@ -675,6 +705,8 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
         return {
             "binimg": binimg,
             "binimg_aug": binimg_aug,
+            "text_conditioned_binimg": text_conditioned_binimg,
+            "text_conditioned_binimg_aug": text_conditioned_binimg_aug,
             "valid_binimg": valid_binimg,
             "valid_binimg_aug": valid_binimg_aug,
             "visibility": visibility,
@@ -714,20 +746,20 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
             "complex_semantic_data": complex_semantic_data, 
         }
     
-    def _process_semantic_bev_region(
+    def _fill_bev_region(
         self,
         bbox_img,
         semantic_map,
-        text_embedding,
+        value,
     ) -> torch.Tensor:
-        
+
         # -> round
         poly_region_img_rd = self.geomscaler.pts_from_spatial_to_img(bbox_img)
         poly_region_img_rd = (np.round(poly_region_img_rd)).astype(np.int32)
         
         mask = np.zeros(semantic_map.shape[1:], dtype=np.uint8)
         cv2.fillConvexPoly(mask, poly_region_img_rd, 1)
-        semantic_map[:, mask == 1] = text_embedding.unsqueeze(-1)
+        semantic_map[:, mask == 1] = value.unsqueeze(-1)
 
         return semantic_map
 
