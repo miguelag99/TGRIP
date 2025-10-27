@@ -148,8 +148,8 @@ class TextConditionedTemporalNuScenesDataset(TemporalNuScenesDataset):
         # -> Visibility
         visibility, visibility_aug = np.full((2, h, w), 255, dtype=np.uint8)
         semantic_visibility, semantic_visibility_aug = (
-            np.full((1, h, w), 255, dtype=np.uint8),
-            np.full((1, h, w), 255, dtype=np.uint8),
+            np.full((h, w), 255, dtype=np.uint8),
+            np.full((h, w), 255, dtype=np.uint8),
         )
 
         # -> Mobile masks: 0: parked, 1: mobile, 2: stopped, 3: unknown

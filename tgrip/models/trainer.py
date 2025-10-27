@@ -13,6 +13,7 @@ from lightning.pytorch.loggers.wandb import WandbLogger
 from lightning.pytorch.utilities.rank_zero import rank_zero_only
 from torch import Tensor
 from torch.cuda import max_memory_allocated, max_memory_reserved
+from einops import rearrange
 
 from tgrip.data.dataset.nuscenes_common import MAP_DYNAMIC_TAG, VISIBILITY_TAG
 from tgrip.loss import BCELoss, CELoss, SpatialLoss, CosineSimilarityLoss, Weighting
@@ -188,6 +189,12 @@ class PredictionTrainer(LightningModule):
         # -> Cosine similarity for semantic map
         if self.with_semantic_map:
             dict_metrics.update({"metric_cosine_similarity": CosineSimilarityMetric()})
+            
+        # -> Text conditioned segmentation metrics
+        if self.with_text_conditioned_segm:
+            dict_metrics.update(
+                {"metric_iou_text_conditioned_segm": IntersectionOverUnion(n_classes=2)}
+            )
 
         # ---> Training and validation metrics
         if metric_kwargs.get("only_val", True):
@@ -263,7 +270,18 @@ class PredictionTrainer(LightningModule):
                     "semantic_similarity": CosineSimilarityLoss(),
                 }
             )
-        
+            
+        # -> Text conditioned segmentation losses
+        self.with_text_conditioned_segm = loss_kwargs.get(
+            "with_text_conditioned_segm", False
+        )
+        if self.with_text_conditioned_segm:
+            dict_losses["bev"].update(
+                {
+                    "text_conditioned_segmentation": loss_segm(),
+                }
+            )
+
         return dict_losses
 
     @rank_zero_only
@@ -610,7 +628,7 @@ class PredictionTrainer(LightningModule):
             name = f"bev/{l_key}"
             losses.update({name: loss})
             total_loss = update_total_loss(total_loss, loss, name)
-            
+        
         # -> Semantic similarity
         for l_key, pred_key, target_key, l_bool in zip(
             ["semantic_similarity"],
@@ -621,10 +639,32 @@ class PredictionTrainer(LightningModule):
             if not l_bool:
                 continue
             l_bev_loss = bev_losses[l_key]
-            l_preds = preds[pred_key]
-            l_targets = batch[target_key][:,1]  # Only present
+            l_preds = preds['semantic_supervision'][pred_key]
+            l_targets = batch[target_key]  # Only present
+
+            loss = l_bev_loss(
+                rearrange(l_preds,'b t c h w -> (b t) c h w'),
+                rearrange(l_targets,'b t c h w -> (b t) c h w')
+            )
+            name = f"bev/{l_key}"
+            losses.update({name: loss})
+            total_loss = update_total_loss(total_loss, loss, name)
             
+        # -> Text conditioned segmentation
+        for l_key, pred_key, target_key, l_bool in zip(
+            ["text_conditioned_segmentation"],
+            ["text_conditioned_seg"],
+            ["text_conditioned_binimg"],
+            [self.with_text_conditioned_segm],
+        ):
+            if not l_bool:
+                continue
+            l_bev_loss = bev_losses[l_key]
+            l_preds = preds['semantic_supervision'][pred_key]
+            l_targets = batch[target_key]
+
             loss = l_bev_loss(l_preds, l_targets)
+            
             name = f"bev/{l_key}"
             losses.update({name: loss})
             total_loss = update_total_loss(total_loss, loss, name)
@@ -735,14 +775,26 @@ class PredictionTrainer(LightningModule):
                     pred_instance_seg[:,1:],
                     batch["instance"][:,1:].squeeze(2).long()
                 )
-                
+                        
         if ("mixed_semantic_map" in batch.keys()):
             if hasattr(self, f"metric_cosine_similarity_{mode}"):
                 metric = getattr(self, f"metric_cosine_similarity_{mode}")
-                metric.update(
-                    preds["semantic_bev"],
-                    batch["complex_semantic_map"][:,1]    # Only present
+                pred = rearrange(
+                    preds["semantic_supervision"]["semantic_bev"][:, 1:],
+                    "b t c h w -> (b t) c h w",
                 )
+                target = rearrange(
+                    batch["mixed_semantic_map"][:, 1:], "b t c h w -> (b t) c h w"
+                )
+                metric.update(pred, target)
+
+        if ("text_conditioned_binimg" in batch.keys()):
+            if hasattr(self, f"metric_iou_text_conditioned_segm_{mode}"):
+                metric = getattr(self, f"metric_iou_text_conditioned_segm_{mode}")
+                pred_segm = preds["semantic_supervision"]["text_conditioned_seg"].sigmoid()
+                cls_pred_binimg = torch.argmax(pred_segm.contiguous(), 2, keepdims=True)
+                target_segm = batch["text_conditioned_binimg"]
+                metric.update(cls_pred_binimg[:, 1:], target_segm[:, 1:])
 
     def _init_preds_dict_for_vis(self, preds):
         preds_dict = {"bev": {}, "masks": {}}

@@ -163,13 +163,18 @@ class TGRIPPredictor(Network):
         # Temporal
         bev_query = self.forward_temporal(bev_query)
         
+        out_semantic_supervision = {}
         if self.text_conditioner is not None:
             if self.text_encoder is not None and text_condition is not None:
                 # For now, one condition per batch
                 text_embed = self.text_encoder(text_condition).unsqueeze(1)  # [b, 1, text_dim]
             else:
                 text_embed = None
-            semantic_bev, bev_query = self.text_conditioner(bev_query, text_embed)
+            semantic_bev, text_conditioned_seg = self.text_conditioner(
+                bev_query, text_embed
+            )
+            out_semantic_supervision['text_conditioned_seg'] = text_conditioned_seg
+            out_semantic_supervision['semantic_bev'] = semantic_bev
         else:
             semantic_bev = None
 
@@ -178,5 +183,5 @@ class TGRIPPredictor(Network):
         for k, v in dict_out.items():
             if isinstance(v, torch.Tensor):
                 dict_out[k] = rearrange(v, "(b t) c h w -> b t c h w", t=self.out_seq_len)
-    
-        return {"bev": dict_out, "semantic_bev": semantic_bev}
+
+        return {"bev": dict_out, "semantic_supervision": out_semantic_supervision}
