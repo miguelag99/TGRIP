@@ -23,6 +23,7 @@ dependencies = [
     "numpy==1.26.4",
     "nuscenes-devkit>=1.1.0",
     "opencv-python>=4.11.0.86",
+    "peft>=0.17.1",
     "pre-commit>=4.3.0",
     "pyfiglet>=1.0.4",
     "pyquaternion>=0.9.9",
