@@ -63,7 +63,7 @@ WORKDIR /home/$USER/workspace
 
 # Set custom commands, aliases, and environment variables
 ENV USER=$USER
-RUN echo "alias INSTALL_OPS=\"cd /home/$USER/workspace && uv pip install tgrip/ops/defattn/ --no-build-isolation --link-mode=copy &&   uv pip install tgrip/ops/gs/ --no-build-isolation --link-mode=copy\"" >> /home/$USER/.bashrc
+RUN echo "export HF_HOME="/home/$USER/workspace/checkpoints/.hf"" >> /home/$USER/.bashrc
 
 # Change terminal color
 ENV TERM=xterm-256color
