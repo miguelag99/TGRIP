@@ -1,0 +1,3 @@
+_target_: tgrip.models.img_encoder.DINOv3
+version: vit_large_patch16_dinov3.lvd1689m
+downsample: 16

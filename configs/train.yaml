@@ -53,6 +53,7 @@ model:
     with_centr_offs: ${data.keep_input_centr_offs}
     with_flow: ${data.keep_input_flow_map}
     with_semantic_map: ${data.keep_input_semantic_maps}
+    with_text_conditioned_segm: ${data.apply_text_filter}
     compress_persp: False
     segm_type: null
 

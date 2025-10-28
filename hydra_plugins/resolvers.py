@@ -13,6 +13,9 @@ def get_in_c_neck(target):
         return [768]
     elif key == "EfficientVit":
         return [128, 256]
+    elif key == "DINOv3":
+        # return [1280, 1280] # vit_huge_plus_patch16_dinov3
+        return [1024, 1024]  # vit_large_patch16_dinov3
     else:
         raise NotImplementedError
 
@@ -29,6 +32,9 @@ def get_neck_interm_c(target):
         return 768
     elif key == "EfficientVit":
         return 128
+    elif key == "DINOv3":
+        # return 640  # vit_huge_plus_patch16_dinov3
+        return 512  # vit_large_patch16_dinov3
     else:
         raise NotImplementedError
 

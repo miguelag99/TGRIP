@@ -52,8 +52,8 @@ class PredictionTrainer(LightningModule):
         name="",
     ):
         super().__init__()
-        self.save_hyperparameters(logger=False, ignore=["net"])
-        
+        self.save_hyperparameters(logger=False, ignore=["net", "text_encoder"])
+
         self.net = net
 
         # Temporal
