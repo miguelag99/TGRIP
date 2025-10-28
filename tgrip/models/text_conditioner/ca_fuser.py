@@ -75,8 +75,8 @@ class CASemanticFuser(nn.Module):
         """
         B, T, C, H, W = bev_feats.shape
         semantic_bev = self.semantic_projector(bev_feats)  # [B, T_out, D, H, W]
-        text_embed = text_embed.repeat(1, self.future_frames, 1).unsqueeze(2)  # [B, T_out, 1, D]
         if text_embed is not None:
+            text_embed = text_embed.repeat(1, self.future_frames, 1).unsqueeze(2)  # [B, T_out, 1, D]
             bev_flat = semantic_bev.flatten(3).permute(0, 1, 3, 2)  # [B, T_out, N, D]
             bev_q, _ = self.cross_attn(
                 query=rearrange(bev_flat, "b to n d -> (b to) n d"),  # [B*T_out, N, D]
