@@ -272,7 +272,7 @@ class PredictionTrainer(LightningModule):
         if self.with_text_conditioned_score:
             dict_losses["bev"].update(
                 {
-                    "text_conditioned_score": SpatialLoss(norm=2),
+                    "text_conditioned_score": SpatialLoss(norm=2, ignore_index=255.0),
                 }
             )
 
@@ -672,7 +672,7 @@ class PredictionTrainer(LightningModule):
             l_preds = preds['semantic_supervision'][pred_key]
             l_targets = batch[target_key]
 
-            loss = l_bev_loss(l_preds, l_targets)
+            loss = l_bev_loss(l_preds, l_targets, batch['text_conditioned_binimg'].bool()) # Not use areas without class (0)
             
             name = f"bev/{l_key}"
             losses.update({name: loss})
