@@ -43,7 +43,7 @@ class CASemanticFuser(nn.Module):
             batch_first=True,
         )
         
-        self.aux_seg_head = nn.Sequential(
+        self.aux_score_head = nn.Sequential(
             nn.Conv2d(
                 embed_dim,
                 bev_dim,
@@ -55,7 +55,7 @@ class CASemanticFuser(nn.Module):
             nn.ReLU(inplace=True),
             nn.Conv2d(
                 bev_dim,
-                len(self.class_weights),
+                1,
                 kernel_size=1,
                 stride=1,
                 padding=0
@@ -71,7 +71,7 @@ class CASemanticFuser(nn.Module):
         
         Returns:
         semantic_bev: [B, D, H, W] — BEV features projected to text embedding space
-        final_feats: [B, T_out, C, H, W] — BEV features fused with text attention scores
+        text_score: [B, T_out, 1, H, W] — segmentation score map for text condition
         """
         B, T, C, H, W = bev_feats.shape
         semantic_bev = self.semantic_projector(bev_feats)  # [B, T_out, D, H, W]
@@ -95,15 +95,15 @@ class CASemanticFuser(nn.Module):
             )
             # If no text condition is provided, assume no attention
 
-        text_conditioned_seg = self.aux_seg_head(bev_q)
-        text_conditioned_seg = rearrange(
-            text_conditioned_seg,
+        text_score = self.aux_score_head(bev_q)
+        text_score = rearrange(
+            text_score,
             "(b to) c h w -> b to c h w",
             b=B,
             to=self.future_frames,
         )
 
-        return semantic_bev, text_conditioned_seg
+        return semantic_bev, text_score
     
 class SemanticProjector(nn.Module):
     def __init__(

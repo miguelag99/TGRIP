@@ -170,10 +170,10 @@ class TGRIPPredictor(Network):
                 text_embed = self.text_encoder(text_condition).unsqueeze(1)  # [b, 1, text_dim]
             else:
                 text_embed = None
-            semantic_bev, text_conditioned_seg = self.text_conditioner(
+            semantic_bev, semantic_score_map = self.text_conditioner(
                 bev_query, text_embed
             )
-            out_semantic_supervision['text_conditioned_seg'] = text_conditioned_seg
+            out_semantic_supervision['semantic_score_map'] = semantic_score_map
             out_semantic_supervision['semantic_bev'] = semantic_bev
         else:
             semantic_bev = None

@@ -5,13 +5,13 @@ from typing import Any, Dict
 import hydra
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import os
 from omegaconf import DictConfig
 from psutil import virtual_memory
 from lightning.pytorch.core import LightningModule
 from lightning.pytorch.loggers.wandb import WandbLogger
 from lightning.pytorch.utilities.rank_zero import rank_zero_only
-from torch import Tensor
 from torch.cuda import max_memory_allocated, max_memory_reserved
 from einops import rearrange
 
@@ -189,13 +189,7 @@ class PredictionTrainer(LightningModule):
         # -> Cosine similarity for semantic map
         if self.with_semantic_map:
             dict_metrics.update({"metric_cosine_similarity": CosineSimilarityMetric()})
-            
-        # -> Text conditioned segmentation metrics
-        if self.with_text_conditioned_segm:
-            dict_metrics.update(
-                {"metric_iou_text_conditioned_segm": IntersectionOverUnion(n_classes=2)}
-            )
-
+        
         # ---> Training and validation metrics
         if metric_kwargs.get("only_val", True):
             avail_mode = ["val"]
@@ -271,14 +265,14 @@ class PredictionTrainer(LightningModule):
                 }
             )
             
-        # -> Text conditioned segmentation losses
-        self.with_text_conditioned_segm = loss_kwargs.get(
-            "with_text_conditioned_segm", False
+        # -> Text conditioned score losses
+        self.with_text_conditioned_score = loss_kwargs.get(
+            "with_text_conditioned_score", False
         )
-        if self.with_text_conditioned_segm:
+        if self.with_text_conditioned_score:
             dict_losses["bev"].update(
                 {
-                    "text_conditioned_segmentation": loss_segm(),
+                    "text_conditioned_score": SpatialLoss(norm=2),
                 }
             )
 
@@ -443,7 +437,22 @@ class PredictionTrainer(LightningModule):
         # # Create final semantic maps directly in GPU if needed
         if self.trainer.datamodule.keep_input_semantic_maps:
             self._fill_semantic_maps(batch, bs)
-        
+            
+        if self.with_text_conditioned_score:
+            assert self.text_encoder is not None, "Text encoder must be provided for text conditioned score."
+
+            B, T, C, H, W = batch['mixed_semantic_map'].shape
+
+            text_embed = self.text_encoder(batch['text_condition']).unsqueeze(1)  # [b, 1, text_dim]
+            text_embed = text_embed.unsqueeze(2).repeat(1, 1, 1, 1)  # [b, 1, 1, text_dim]
+            score_map_target = F.cosine_similarity(
+                rearrange(batch['mixed_semantic_map'],'b t c h w -> b t (h w) c'),
+                text_embed,
+                dim=-1
+            )
+            score_map_target = rearrange(score_map_target,'b t (h w) -> b t 1 h w', h=H, w=W)
+            batch['text_conditioned_score_map'] = score_map_target
+
         # Augmentations:
         # Change reference and consider the augmented BEV as GT.
         if mode == "train":
@@ -649,13 +658,13 @@ class PredictionTrainer(LightningModule):
             name = f"bev/{l_key}"
             losses.update({name: loss})
             total_loss = update_total_loss(total_loss, loss, name)
-            
+
         # -> Text conditioned segmentation
         for l_key, pred_key, target_key, l_bool in zip(
-            ["text_conditioned_segmentation"],
-            ["text_conditioned_seg"],
-            ["text_conditioned_binimg"],
-            [self.with_text_conditioned_segm],
+            ["text_conditioned_score"],
+            ["semantic_score_map"],
+            ["text_conditioned_score_map"],
+            [self.with_text_conditioned_score],
         ):
             if not l_bool:
                 continue
