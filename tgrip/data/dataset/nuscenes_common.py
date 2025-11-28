@@ -11,11 +11,13 @@ import json
 import os
 from copy import deepcopy
 from math import prod
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any, Tuple
 
 import cv2
 import numpy as np
+import numpy.typing as npt
 import torch
+
 from einops import rearrange
 from nuscenes.utils.data_classes import Box
 from nuscenes.utils.geometry_utils import BoxVisibility, transform_matrix
@@ -548,6 +550,7 @@ class NuScenesDataset(torch.utils.data.Dataset):
             - binimg_aug: (Tensor[torch.uint8]) contains augmented bev segmentation.
             - classes: (Tensor[torch.uint8]) contains annotated classes.
             - centers: (Tensor[torch.float32]) contains center coordinates.
+            - semantic_map: (Tensor[torch.uint8]) contains bev semantic map with corresponding id in CLASS_CONDITIONS.
         """
         # Alias
         h, w = self.nx[0], self.nx[1]
@@ -592,6 +595,12 @@ class NuScenesDataset(torch.utils.data.Dataset):
         
         # -> Flow map
         flow_map = torch.zeros(2, h, w)
+        
+        # -> Semantic map
+        semantic_map, semantic_map_aug = (
+            torch.zeros(1, h, w, dtype=torch.uint8),
+            torch.zeros(1, h, w, dtype=torch.uint8),
+        )
 
         # Are augmentations activated ?
         bool_aug_activated = not np.allclose(bev_aug, np.eye(4))
@@ -670,6 +679,20 @@ class NuScenesDataset(torch.utils.data.Dataset):
                 bbox,bbox_img,visibility,inst,instance,x,y,centerness,SIGMA,offsets,
                 mobility,center_bbox_on_img,is_visible, valid_centerness,
             )
+            
+            # Semantic info associated to the instance
+            if 'semantic_map' in self.keys_to_keep and inst["category_name"] in DETECTION_CLS:
+                cat_name = inst["category_name"]
+                embed_cls = self.class_conditions.get(cat_name, None)
+                embed_cls = (
+                    torch.tensor(embed_cls["idx"])
+                    if embed_cls is not None
+                    else torch.zeros(1, dtype=torch.uint8)
+                )
+                semantic_map = self._fill_bev_region(
+                    bbox_img, semantic_map, embed_cls
+                )
+            
             if bool_aug_activated:
                 (
                     bbox_aug,(center_aug, bbox_h_aug, bbox_w_aug),offsets_aug,
@@ -678,6 +701,12 @@ class NuScenesDataset(torch.utils.data.Dataset):
                     centerness_aug,SIGMA,offsets_aug,mobility_aug,center_bbox_on_img_aug,
                     is_visible, valid_centerness_aug,
                 )
+                
+                if 'semantic_map' in self.keys_to_keep and inst["category_name"] in DETECTION_CLS:
+                    semantic_map_aug = self._fill_bev_region(
+                        bbox_aug_img, semantic_map_aug, embed_cls
+                    )
+                    
             # fmt: on
 
             if is_ego:
@@ -736,6 +765,7 @@ class NuScenesDataset(torch.utils.data.Dataset):
             # Torch
             centerness_aug = centerness.clone()
             offsets_aug = offsets.clone()
+            semantic_map_aug = semantic_map.clone()
 
         # Can not stack empty list
         if len(centers) > 0:
@@ -860,6 +890,8 @@ class NuScenesDataset(torch.utils.data.Dataset):
             lidar_img_aug,
             instance,
             instance_aug,
+            semantic_map,
+            semantic_map_aug,
         ] = [
             prepare_img_axis(x, self.to_cam_ref)
             for x in [
@@ -883,6 +915,8 @@ class NuScenesDataset(torch.utils.data.Dataset):
                 lidar_img_aug,
                 instance,
                 instance_aug,
+                semantic_map,
+                semantic_map_aug,
             ]
         ]
 
@@ -916,7 +950,9 @@ class NuScenesDataset(torch.utils.data.Dataset):
             "bbox_attr": bbox_attr,
             "bbox_attr_aug": bbox_attr_aug,
             "instance": instance,
-            "instance_aug": instance_aug
+            "instance_aug": instance_aug,
+            "semantic_map": semantic_map,
+            "semantic_map_aug": semantic_map_aug,
         }
 
     def _get_offset_map_from_center_bbox(self, grid, center_bbox):
@@ -1002,7 +1038,70 @@ class NuScenesDataset(torch.utils.data.Dataset):
         mat[:3, :3] = rot
         mat[:3, -1] = trans
         return mat
+    
+    def _fill_bev_region(
+        self,
+        bbox_img,
+        semantic_map,
+        value,
+    ) -> torch.Tensor:
 
+        # -> round
+        poly_region_img_rd = self.geomscaler.pts_from_spatial_to_img(bbox_img)
+        poly_region_img_rd = (np.round(poly_region_img_rd)).astype(np.int32)
+                  
+        mask = np.zeros(semantic_map.shape[-2:], dtype=np.uint8)
+        cv2.fillConvexPoly(mask, poly_region_img_rd, 1)
+        semantic_map[:, mask == 1] = value.unsqueeze(-1)
+
+        return semantic_map
+
+    def _get_outputs_bev(
+        self,
+        bev_records_T: List[Tuple[int, int]],
+        egoPout_to_global: npt.NDArray,
+        bev_aug: npt.NDArray,
+        condition: Dict[str, Any] = None,
+    ) -> List[Dict[str, Any]]:
+        """Get the BEV related outputs.
+
+        Args:
+            bev_records_T (List[Tuple[int, int]]): List of output time and pose.
+            egoPout_to_global (npt.NDArray): Matrix from world to recorded ego reference frame.
+            egoTout_to_seq (npt.NDArray): Matrix from one ego (time) to another ego (pose) reference frame.
+            seq_aug (npt.NDArray): Augmentation matrix moving the sequence. Does not impact the BEV.
+            bev_aug (npt.NDArray): Augmentation matrix moving the bev. Impacts the BEV.
+
+        Returns:
+            List[Dict[str, Any]]: List of BEV related outputs.
+        """
+        data_bev = []
+        tokens = []
+                       
+        for i, rec in enumerate(bev_records_T):
+            tokens.append(rec["token"])
+            out_bev_dict = self.get_bev_related_data(
+                rec=rec,
+                egoPout_to_global=egoPout_to_global[i],
+                bev_aug=bev_aug[i],  # from query to query aug.
+                scene_condition=condition,
+            )
+
+            out_bev_dict.update({"tokens": tokens})
+
+            if self.with_hdmap:
+                out_bev_dict.update(self.get_map_related_data(rec, bev_aug[i]))
+
+            data_bev.append(out_bev_dict)
+
+        final_instance_map = self.inst_map
+        
+        # Reset instance mapping.
+        self.inst_map = {}
+        self.center_map = {}
+
+        return data_bev, final_instance_map
+    
     def _process_bbox_region(
         # fmt: off
         self,bbox,bbox_img,visibility,inst,instance,x,y,centerness,sigma,offsets,

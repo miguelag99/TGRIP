@@ -7,8 +7,8 @@ defaults:
   - net/autoencoder: sparse_unet.yaml
   - net/temporal: diff_guided_predformer.yaml
   - net/heads: pyramid_stconv.yaml
-  - net/text_encoder: minilm.yaml
-  - net/text_conditioner: ca_fuser.yaml
+  - net/text_encoder: clip.yaml
+  - net/semantic_head: semantic_conv.yaml
 
 name: TGRIPPredictor
 

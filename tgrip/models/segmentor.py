@@ -28,11 +28,11 @@ class TGRIPSegmentor(Network):
         autoencoder=None,
         temporal=None,
         text_encoder=None,
-        text_conditioner=None,
         use_future_ego=False,
         out_seq_len=1,
         in_seq_len=3,
         heads=None,
+        semantic_head=None,
         in_c: Dict[str, int] = {},
         out_c: Dict[str, int] = {},
         in_shape: Dict[str, int] = {},
@@ -64,9 +64,9 @@ class TGRIPSegmentor(Network):
         self.out_seq_len = out_seq_len
         self.n_classes = len(heads.class_weights)
         
-        # Text
+        # Semantic modules
         self.text_encoder = text_encoder
-        self.text_conditioner = text_conditioner
+        self.semantic_head = semantic_head
         
     # Decoder.
     def _prepare_decoder(self, query, hq_wq):
@@ -162,18 +162,19 @@ class TGRIPSegmentor(Network):
             
         # Temporal
         bev_query = self.forward_temporal(bev_query)
-        
-        if self.text_conditioner is not None:
-            semantic_bev = self.text_conditioner(bev_query)
-        else:
-            semantic_bev = None
-        
+                
         # Heads
         dict_out = self.heads(bev_query)
-                
+        
+        # TODO: adapt semantic blocks to present segmentation
+        out_semantic_supervision = {}
+
         for k, v in dict_out.items():
             if isinstance(v, torch.Tensor):
                 dict_out[k] = rearrange(v, "(b t) c h w -> b t c h w", t=self.out_seq_len)
     
-        return {"bev": dict_out, "semantic_bev": semantic_bev}
-
+        out_semantic_supervision.update(
+            {"semantic_bev": self.semantic_head(bev_query)}
+        )
+        
+        return {"bev": dict_out, "semantic": out_semantic_supervision}

@@ -26,10 +26,11 @@ profile: False
 
 # simply provide checkpoint path to evaluate
 ckpt:
-  path: "checkpoints/.ckpt"
+  path: "checkpoints/BEVPredFormer_scale05.ckpt"
   model:
-    freeze: null
-    load: 'all'
+    freeze: ['net.backbone', 'net.neck', 'net.view_transform', 'net.decoder', 'net.temporal', 
+            'net.heads', 'net.coord_selector', 'net.query_gen']
+    load: "all"
 
 # seed for random number generators in pytorch, numpy and python.random
 seed: null
@@ -42,8 +43,8 @@ flags:
 
 model:
   text_encoder:
-    _target_: tgrip.models.text_encoder.MiniLMEncoder
-    model_name: "sentence-transformers/all-MiniLM-L6-v2"
+    _target_: tgrip.models.text_encoder.CLIPEncoder
+    model_name: "openai/clip-vit-base-patch32"
   
   loss_kwargs:
     with_binimg: ${data.keep_input_binimg}
@@ -76,9 +77,7 @@ model:
     with_distance: false
     with_flow: ${data.keep_input_flow_map}
     only_val: true 
-    track_pts: False
     track_mem: False
-    track_pts_thresh: False
     pts_thresh: 0.
     
   temporal_kwargs:

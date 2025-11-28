@@ -4,12 +4,14 @@ Adapted from https://github.com/valeoai/PointBeV
 """
 
 import pdb
-from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import numpy.typing as npt
 import torch
+import torch.nn as nn
+
 from lightning.pytorch.utilities.rank_zero import rank_zero_only
+from typing import Any, Dict, List, Tuple
 
 from tgrip.data.dataset.nuscenes_common import CAMREF, NuScenesDataset
 from tgrip.utils.geom import (
@@ -21,6 +23,7 @@ from tgrip.utils.geom import (
     mat2pose_vec,
 )
 
+from .semantic_data import CLASS_CONDITIONS
 
 class TemporalNuScenesDataset(NuScenesDataset):
     def __init__(
@@ -40,6 +43,7 @@ class TemporalNuScenesDataset(NuScenesDataset):
         keep_input_flow_map: bool = False,
         keep_input_instance_bev: bool = False,
         keep_input_persp: bool = False,
+        keep_input_semantic_maps: bool = False,
         save_folder: bool = "",
         *args,
         **kwargs,
@@ -62,12 +66,15 @@ class TemporalNuScenesDataset(NuScenesDataset):
             keep_input_persp,
             keep_input_flow_map,
             keep_input_instance_bev,
+            keep_input_semantic_maps
         )
         self.save_folder = save_folder
         self._print_desc()
         assert mode_ref_cam_T in ["random", "present", "self"]
         self.mode_ref_cam_T = mode_ref_cam_T
-
+        
+        self.class_conditions = CLASS_CONDITIONS
+        
     def _init_temporality(
         self,
         cam_T_P: List[List[int]] = [[0, 0]],
@@ -142,6 +149,7 @@ class TemporalNuScenesDataset(NuScenesDataset):
         keep_input_persp,
         keep_input_flow_map,
         keep_input_instance_bev,
+        keep_input_semantic_maps,
     ):
         """Init keys to keep in the output dictionary."""
         keys_to_keep = [
@@ -210,6 +218,10 @@ class TemporalNuScenesDataset(NuScenesDataset):
         if keep_input_instance_bev:
             keys_to_keep.append("instance")
             keys_to_keep.append("instance_aug")
+            
+        if keep_input_semantic_maps:
+            keys_to_keep.append("semantic_map")
+            keys_to_keep.append("semantic_map_aug")
 
         self.keys_to_keep = keys_to_keep
 

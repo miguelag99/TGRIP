@@ -16,6 +16,7 @@ from torch.cuda import max_memory_allocated, max_memory_reserved
 from einops import rearrange
 
 from tgrip.data.dataset.nuscenes_common import MAP_DYNAMIC_TAG, VISIBILITY_TAG
+from tgrip.data.dataset.semantic_data import CLASS_CONDITIONS
 from tgrip.loss import BCELoss, CELoss, SpatialLoss, CosineSimilarityLoss, Weighting
 from tgrip.metric import (
     IoUMetric,
@@ -71,10 +72,21 @@ class PredictionTrainer(LightningModule):
         )
 
         # Text Encoder
-        self.text_encoder = text_encoder.to(
-            "cuda" if torch.cuda.is_available() else "cpu"
-        ) if text_encoder is not None else None
+        if loss_kwargs.with_semantic_map:
+            assert (
+                text_encoder is not None
+            ), "Text encoder must be provided if semantic map loss is used."
+            
+            self.text_encoder = (
+                text_encoder.to("cuda" if torch.cuda.is_available() else "cpu")
+                if text_encoder is not None
+                else None
+            )
 
+            self.conditions = CLASS_CONDITIONS
+            for k, v in self.conditions.items():
+                v["embedding"] = self.text_encoder(v["text"])
+        
         # Args
         self._print_info(dict_losses, dict_metrics)
         self._init_val(val_kwargs)
@@ -129,20 +141,10 @@ class PredictionTrainer(LightningModule):
             )
             
             # Tracking metrics during the learning
-            self.track_pts = metric_kwargs["track_pts"]
-            if self.track_pts:
-                dict_metrics.update({"metric_N_fine_pts": MeanMetric()})
-                dict_metrics.update({"metric_N_coarse_pts": MeanMetric()})
-
             self.track_mem = metric_kwargs["track_mem"]
             if self.track_mem:
                 dict_metrics.update({"metric_mem": MeanMetric()})
                 dict_metrics.update({"metric_mem_r": MeanMetric()})
-
-            self.track_pts_thresh = metric_kwargs["track_pts_thresh"]
-            self.pts_thresh = metric_kwargs["pts_thresh"]
-            if self.track_pts_thresh:
-                dict_metrics.update({"metric_pts_thresh": MeanMetric()})
 
         # -> Per dynamic tag
         self.map_dynamic_tag = MAP_DYNAMIC_TAG
@@ -188,7 +190,9 @@ class PredictionTrainer(LightningModule):
             
         # -> Cosine similarity for semantic map
         if self.with_semantic_map:
-            dict_metrics.update({"metric_cosine_similarity": CosineSimilarityMetric()})
+            dict_metrics.update(
+                {"metric_cosine_similarity": CosineSimilarityMetric()}
+            )
         
         # ---> Training and validation metrics
         if metric_kwargs.get("only_val", True):
@@ -264,18 +268,7 @@ class PredictionTrainer(LightningModule):
                     "semantic_similarity": CosineSimilarityLoss(),
                 }
             )
-            
-        # -> Text conditioned score losses
-        self.with_text_conditioned_score = loss_kwargs.get(
-            "with_text_conditioned_score", False
-        )
-        if self.with_text_conditioned_score:
-            dict_losses["bev"].update(
-                {
-                    "text_conditioned_score": SpatialLoss(norm=2, ignore_index=255.0),
-                }
-            )
-
+        
         return dict_losses
 
     @rank_zero_only
@@ -315,121 +308,46 @@ class PredictionTrainer(LightningModule):
     def _fill_semantic_maps(self, batch, bs):
         """Fill semantic maps with true CLIP embeds instead of indices.
         The process is done on GPU to avoid large memory usage in CPU RAM.
-        This method also mixes the different semantic maps into one."""
+        """
         
-        bev_h, bev_w = batch["semantic_positional_map"].shape[-2:]
-        tout = batch["semantic_positional_map"].shape[1]
-        text_dim = self.trainer.datamodule.pose_conditions["front"]["embedding"].shape[
-            1
-        ]
-        device = batch["semantic_positional_map"].device
+        bev_h, bev_w = batch["semantic_map"].shape[-2:]
+        tout = batch["semantic_map"].shape[1]
+        text_dim = self.text_encoder.out_dim  # CLIP text embedding dimension
+        device = batch["semantic_map"].device
 
-        # Positional maps
-        final_semantics = {}
-        semantic_map_configs = [
-            ("positional", "semantic_positional_map", "pose_conditions"),
-            ("velocity", "semantic_speed_map", "velocity_conditions"),
-            ("class", "semantic_class_map", "class_conditions"),
-        ]
-
-        for semantic_type, map_key, cond_key in semantic_map_configs:
-            base_shape = (bs, tout, text_dim, bev_h, bev_w)
-            dtype = torch.float16
-            final_semantics[semantic_type] = torch.zeros(
-                base_shape, device=device, dtype=dtype
-            )
-            final_semantics[semantic_type + "_aug"] = torch.zeros_like(
-                final_semantics[semantic_type]
-            )
-
-            conditions = getattr(self.trainer.datamodule, cond_key)
-            for k, v in conditions.items():
-                idx = v["idx"]
-                embedding = v["embedding"].to(dtype).to(device)
-                embedding_expanded = embedding.view(1, 1, -1, 1, 1)
-
-                mask = (batch[map_key] == idx).to(device)
-                mask_aug = (batch[map_key + "_aug"] == idx).to(device)
-                mask_expanded = mask.expand(-1, -1, embedding_expanded.shape[2], -1, -1)
-                mask_aug_expanded = mask_aug.expand_as(mask_expanded)
-
-                final_semantics[semantic_type] = torch.where(
-                    mask_expanded,
-                    embedding_expanded,
-                    final_semantics[semantic_type],
-                )
-                final_semantics[semantic_type + "_aug"] = torch.where(
-                    mask_aug_expanded,
-                    embedding_expanded,
-                    final_semantics[semantic_type + "_aug"],
-                )
-
-        # Fuse all semantic maps (using mean, could be changed)
-        batch["mixed_semantic_map"] = (
-            final_semantics["positional"]
-            + final_semantics["velocity"]
-            + final_semantics["class"]
-        ) / 3
-
-        batch["mixed_semantic_map_aug"] = (
-            final_semantics["positional_aug"]
-            + final_semantics["velocity_aug"]
-            + final_semantics["class_aug"]
-        ) / 3
-        
-        # Complex semantic maps
-        final_semantics['complex_semantic_map'] = torch.zeros(
-            (bs, tout, text_dim, bev_h, bev_w), device=device, dtype=dtype
+        base_shape = (bs, tout, text_dim, bev_h, bev_w)
+        dtype = torch.float32
+        final_semantics = torch.zeros(
+            base_shape, device=device, dtype=dtype
         )
-        final_semantics['complex_semantic_map_aug'] = torch.zeros_like(
-            final_semantics['complex_semantic_map']
+        final_semantics_aug = torch.zeros_like(
+            final_semantics
         )
-        
-        # Collect all unique texts from complex_semantic_data
-        unique_texts = set()
-        for b in range(bs):
-            for t in range(tout):
-                complex_semantic_data = batch['complex_semantic_data'][b][t]
-                for text in complex_semantic_data.keys():
-                    unique_texts.add(text)
-        
-        # Perform text encoder inference once for all unique texts
-        text_to_embedding = {}
-        
-        for text in unique_texts:
-            embedding = self.text_encoder(text).to(dtype).to(device)
-            text_to_embedding[text] = embedding
-        
-        # Now fill the complex semantic maps using cached embeddings
-        for b in range(bs):
-            for t in range(tout):
-                complex_semantic_data = batch['complex_semantic_data'][b][t]
-                complex_semantic_map = batch['complex_semantic_map'][b, t]
-                complex_semantic_map_aug = batch['complex_semantic_map_aug'][b, t]
+                
+        for k, v in self.conditions.items():
+            idx = v["idx"]
+            embedding = v["embedding"].to(dtype).to(device)
+            embedding_expanded = embedding.view(1, 1, -1, 1, 1)
 
-                for text, v in complex_semantic_data.items():
-                    idx = v['id'].to(device)
-                    embedding = text_to_embedding[text]
-                    embedding_expanded = embedding.view(-1, 1, 1)
+            mask = (batch["semantic_map"] == idx).to(device)
+            mask_aug = (batch["semantic_map_aug"] == idx).to(device)
+            mask_expanded = mask.expand(-1, -1, embedding_expanded.shape[2], -1, -1)
+            mask_aug_expanded = mask_aug.expand_as(mask_expanded)
 
-                    mask = (complex_semantic_map == idx).to(device)
-                    mask_aug = (complex_semantic_map_aug == idx).to(device)
-                    mask_expanded = mask.expand(embedding_expanded.shape[0], -1, -1)
-                    mask_aug_expanded = mask_aug.expand_as(mask_expanded)
-                    final_semantics['complex_semantic_map'][b, t] = torch.where(
-                        mask_expanded,
-                        embedding_expanded,
-                        final_semantics['complex_semantic_map'][b, t]
-                    )
-                    final_semantics['complex_semantic_map_aug'][b, t] = torch.where(
-                        mask_aug_expanded,
-                        embedding_expanded,
-                        final_semantics['complex_semantic_map_aug'][b, t],
-                    )
+            final_semantics= torch.where(
+                mask_expanded,
+                embedding_expanded,
+                final_semantics,
+            )
+            final_semantics_aug = torch.where(
+                mask_aug_expanded,
+                embedding_expanded,
+                final_semantics_aug,
+            )
 
-        batch['complex_semantic_map'] = final_semantics['complex_semantic_map']
-        batch['complex_semantic_map_aug'] = final_semantics['complex_semantic_map_aug']
-
+        batch['semantic_map'] = final_semantics
+        batch['semantic_map_aug'] = final_semantics_aug
+        
     # Process
     def common_step(self, batch, step, mode="train", batch_idx=None):
         """Common step: prepare inputs, forward pass, compute losses and metrics."""
@@ -437,22 +355,7 @@ class PredictionTrainer(LightningModule):
         # # Create final semantic maps directly in GPU if needed
         if self.trainer.datamodule.keep_input_semantic_maps:
             self._fill_semantic_maps(batch, bs)
-            
-        if self.with_text_conditioned_score:
-            assert self.text_encoder is not None, "Text encoder must be provided for text conditioned score."
-
-            B, T, C, H, W = batch['mixed_semantic_map'].shape
-
-            text_embed = self.text_encoder(batch['text_condition']).unsqueeze(1)  # [b, 1, text_dim]
-            text_embed = text_embed.unsqueeze(2).repeat(1, 1, 1, 1)  # [b, 1, 1, text_dim]
-            score_map_target = F.cosine_similarity(
-                rearrange(batch['mixed_semantic_map'],'b t c h w -> b t (h w) c'),
-                text_embed,
-                dim=-1
-            )
-            score_map_target = rearrange(score_map_target,'b t (h w) -> b t 1 h w', h=H, w=W)
-            batch['text_conditioned_score_map'] = score_map_target
-
+        
         # Augmentations:
         # Change reference and consider the augmented BEV as GT.
         if mode == "train":
@@ -642,38 +545,16 @@ class PredictionTrainer(LightningModule):
         for l_key, pred_key, target_key, l_bool in zip(
             ["semantic_similarity"],
             ["semantic_bev"],
-            ["complex_semantic_map"],
+            ["semantic_map"],
             [self.with_semantic_map],
         ):
             if not l_bool:
                 continue
             l_bev_loss = bev_losses[l_key]
-            l_preds = preds['semantic_supervision'][pred_key]
-            l_targets = batch[target_key]  # Only present
-
-            loss = l_bev_loss(
-                rearrange(l_preds,'b t c h w -> (b t) c h w'),
-                rearrange(l_targets,'b t c h w -> (b t) c h w')
-            )
-            name = f"bev/{l_key}"
-            losses.update({name: loss})
-            total_loss = update_total_loss(total_loss, loss, name)
-
-        # -> Text conditioned segmentation
-        for l_key, pred_key, target_key, l_bool in zip(
-            ["text_conditioned_score"],
-            ["semantic_score_map"],
-            ["text_conditioned_score_map"],
-            [self.with_text_conditioned_score],
-        ):
-            if not l_bool:
-                continue
-            l_bev_loss = bev_losses[l_key]
-            l_preds = preds['semantic_supervision'][pred_key]
-            l_targets = batch[target_key]
-
-            loss = l_bev_loss(l_preds, l_targets, batch['text_conditioned_binimg'].bool()) # Not use areas without class (0)
+            l_preds = preds['semantic'][pred_key].squeeze()   # Only present
+            l_targets = batch[target_key][:,1]   # Only present
             
+            loss = l_bev_loss(l_preds,l_targets)
             name = f"bev/{l_key}"
             losses.update({name: loss})
             total_loss = update_total_loss(total_loss, loss, name)
@@ -785,25 +666,13 @@ class PredictionTrainer(LightningModule):
                     batch["instance"][:,1:].squeeze(2).long()
                 )
                         
-        if ("mixed_semantic_map" in batch.keys()):
+        if ("semantic_map" in batch.keys()):
             if hasattr(self, f"metric_cosine_similarity_{mode}"):
                 metric = getattr(self, f"metric_cosine_similarity_{mode}")
-                pred = rearrange(
-                    preds["semantic_supervision"]["semantic_bev"][:, 1:],
-                    "b t c h w -> (b t) c h w",
+                metric.update(
+                    preds["semantic"]["semantic_bev"].squeeze(),
+                    batch["semantic_map"][:,1]  # Only present
                 )
-                target = rearrange(
-                    batch["mixed_semantic_map"][:, 1:], "b t c h w -> (b t) c h w"
-                )
-                metric.update(pred, target)
-
-        if ("text_conditioned_binimg" in batch.keys()):
-            if hasattr(self, f"metric_iou_text_conditioned_segm_{mode}"):
-                metric = getattr(self, f"metric_iou_text_conditioned_segm_{mode}")
-                pred_segm = preds["semantic_supervision"]["text_conditioned_seg"].sigmoid()
-                cls_pred_binimg = torch.argmax(pred_segm.contiguous(), 2, keepdims=True)
-                target_segm = batch["text_conditioned_binimg"]
-                metric.update(cls_pred_binimg[:, 1:], target_segm[:, 1:])
 
     def _init_preds_dict_for_vis(self, preds):
         preds_dict = {"bev": {}, "masks": {}}

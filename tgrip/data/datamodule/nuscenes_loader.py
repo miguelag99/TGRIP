@@ -15,10 +15,7 @@ from einops import rearrange
 from nuscenes.nuscenes import NuScenes
 from torch import Tensor
 
-from tgrip.data.dataset import (
-    TemporalNuScenesDataset,
-    TextConditionedTemporalNuScenesDataset,
-)
+from tgrip.data.dataset import TemporalNuScenesDataset
 
 try:
     from lyft_dataset_sdk.lyftdataset import LyftDataset
@@ -84,9 +81,6 @@ class NuScenesDatamodule(pl.LightningDataModule):
         to_cam_ref: bool = False,
         random_cam_ref: bool = False,
         force_camref: Optional[int] = None,
-        # Text encoder
-        text_encoder = None,
-        apply_text_filter: bool = True
     ):
         super().__init__()
 
@@ -145,9 +139,6 @@ class NuScenesDatamodule(pl.LightningDataModule):
         self.to_cam_ref = to_cam_ref
         self.random_cam_ref = random_cam_ref
         self.force_camref = force_camref
-        # Text encoder
-        self.text_encoder = text_encoder
-        self.apply_text_filter = apply_text_filter
 
         self.cls = eval(cls_tag)
 
@@ -210,9 +201,6 @@ class NuScenesDatamodule(pl.LightningDataModule):
             save_folder=self.save_folder,
             # Paths
             hdmaproot=self.hdmaproot,
-            # Text
-            text_encoder=self.text_encoder,
-            apply_text_filter=self.apply_text_filter,
         )
         self.valdata = partial_data(
             # Mode
@@ -227,14 +215,7 @@ class NuScenesDatamodule(pl.LightningDataModule):
             # Mode
             is_train=True,
         )
-        
-        # Semantic embeddings
-        if self.keep_input_semantic_maps:
-            self.pose_conditions = self.traindata.pose_conditions
-            self.velocity_conditions = self.traindata.velocity_conditions
-            self.text_conditions = self.traindata.text_conditions
-            self.class_conditions = self.traindata.class_conditions
-
+            
     def train_dataloader(self):
         return torch.utils.data.DataLoader(
             self.traindata,
@@ -324,8 +305,6 @@ def collate_batch(batch: List[Tensor]):
         "bbox_egopose",
         "bbox_egopose_aug",
         "tokens",
-        "text_condition",
-        "complex_semantic_data",
     ]
     keys = batch[0].keys()
     out_dict = {

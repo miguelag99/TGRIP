@@ -42,8 +42,8 @@ flags:
 
 model:
   text_encoder:
-    _target_: tgrip.models.text_encoder.MiniLMEncoder
-    model_name: "sentence-transformers/all-MiniLM-L6-v2"
+    _target_: tgrip.models.text_encoder.CLIPEncoder
+    model_name: "openai/clip-vit-base-patch32"
   
   loss_kwargs:
     with_binimg: ${data.keep_input_binimg}
@@ -53,7 +53,6 @@ model:
     with_centr_offs: ${data.keep_input_centr_offs}
     with_flow: ${data.keep_input_flow_map}
     with_semantic_map: ${data.keep_input_semantic_maps}
-    with_text_conditioned_score: ${data.apply_text_filter}
     compress_persp: False
     segm_type: null
 
@@ -77,9 +76,7 @@ model:
     with_distance: false
     with_flow: ${data.keep_input_flow_map}
     only_val: true 
-    track_pts: False
     track_mem: False
-    track_pts_thresh: False
     pts_thresh: 0.
     
   temporal_kwargs:

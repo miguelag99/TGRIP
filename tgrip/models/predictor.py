@@ -28,11 +28,11 @@ class TGRIPPredictor(Network):
         autoencoder=None,
         temporal=None,
         text_encoder=None,
-        text_conditioner=None,
         use_future_ego=False,
         out_seq_len=6,
         in_seq_len=3,
         heads=None,
+        semantic_head=None,
         in_c: Dict[str, int] = {},
         out_c: Dict[str, int] = {},
         in_shape: Dict[str, int] = {},
@@ -64,9 +64,9 @@ class TGRIPPredictor(Network):
         self.out_seq_len = out_seq_len
         self.n_classes = len(heads.class_weights)
 
-        # Text
+        # Semantic modules
         self.text_encoder = text_encoder
-        self.text_conditioner = text_conditioner
+        self.semantic_head = semantic_head
 
     # Decoder.
     def _prepare_decoder(self, query, hq_wq):
@@ -164,19 +164,7 @@ class TGRIPPredictor(Network):
         bev_query = self.forward_temporal(bev_query)
         
         out_semantic_supervision = {}
-        if self.text_conditioner is not None:
-            if self.text_encoder is not None and text_condition is not None:
-                # For now, one condition per batch
-                text_embed = self.text_encoder(text_condition).unsqueeze(1)  # [b, 1, text_dim]
-            else:
-                text_embed = None
-            semantic_bev, semantic_score_map = self.text_conditioner(
-                bev_query, text_embed
-            )
-            out_semantic_supervision['semantic_score_map'] = semantic_score_map
-            out_semantic_supervision['semantic_bev'] = semantic_bev
-        else:
-            semantic_bev = None
+        # anchors = self.coord_selector._get_dense_coords(1)
 
         # Heads
         dict_out = self.heads(bev_query)
@@ -184,4 +172,8 @@ class TGRIPPredictor(Network):
             if isinstance(v, torch.Tensor):
                 dict_out[k] = rearrange(v, "(b t) c h w -> b t c h w", t=self.out_seq_len)
 
-        return {"bev": dict_out, "semantic_supervision": out_semantic_supervision}
+        out_semantic_supervision.update(
+            {"semantic_bev": self.semantic_head(bev_query)}
+        )
+        
+        return {"bev": dict_out, "semantic": out_semantic_supervision}

@@ -94,8 +94,6 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
         "logger": logger,
         "trainer": trainer,
     }
-    if logger:
-        sys.stderr = open(Path(logger[0].save_dir) / "stdd.err", "a")
 
     if logger:
         log.info("Logging hyperparameters!")

@@ -7,6 +7,7 @@ class CLIPEncoder(torch.nn.Module):
         self.tokenizer = CLIPTokenizer.from_pretrained(model_name)
         self.encoder = CLIPTextModel.from_pretrained(model_name)
         if freeze:
+            print("Freezing CLIP text encoder parameters.")
             for p in self.encoder.parameters():
                 p.requires_grad = False
         self.out_dim = self._get_output_dim()

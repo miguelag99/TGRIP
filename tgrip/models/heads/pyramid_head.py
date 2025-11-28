@@ -139,22 +139,18 @@ class MultiPyramidHead(nn.Module):
                     kernel_size=1, padding=0
                 ),
             )
-
+        
         # Initialize heads.
-        if with_binimg:
-            map_out.update({"binimg": deepcopy(convnormact_conv_seg)})
-            
-        if with_flow:
-            map_out.update({"flow": deepcopy(convnormact_conv_flow)})
-
-        if with_centr_offs:
-            map_out.update(
-                {
-                    "offsets": deepcopy(convnormact_conv_offs),
-                    "centerness": deepcopy(convnormact_conv_centerness),
-                }
-            )
-
+        map_out.update(
+            {
+                "binimg": deepcopy(convnormact_conv_seg),
+                "offsets": deepcopy(convnormact_conv_offs),
+                "centerness": deepcopy(convnormact_conv_centerness),
+                "flow": deepcopy(convnormact_conv_flow),
+            }
+        )
+        
+        # Extra heads
         if with_hdmap:
             map_out.update({"hdmap": convnormact_conv_chdmap})
         self.map_out = map_out
@@ -165,10 +161,8 @@ class MultiPyramidHead(nn.Module):
         return out_dict
 
     def _apply_final_activation(self, out_dict):
-        """Since spconv can not apply sigmoid to sparse tensor, we do it here."""
-        if self.with_centr_offs:
-            feats = out_dict["centerness"]
-            out_dict["centerness"] = torch.sigmoid(feats)
+        feats = out_dict["centerness"]
+        out_dict["centerness"] = torch.sigmoid(feats)
         return out_dict
 
     def forward(self, x):

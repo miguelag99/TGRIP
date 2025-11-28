@@ -1,6 +1,6 @@
-rich_progress_bar:
-  _target_: lightning.pytorch.callbacks.RichProgressBar
-  refresh_rate: 20
+# rich_progress_bar:
+#   _target_: lightning.pytorch.callbacks.RichProgressBar
+#   refresh_rate: 20
 
 learning_rate_monitor:
   _target_:  lightning.pytorch.callbacks.LearningRateMonitor
@@ -17,8 +17,8 @@ model_checkpoint:
   save_on_train_epoch_end: null
 
   dirpath: ${paths.output_dir}/checkpoints
-  monitor: "val_vpq_metric" 
-  filename: '{epoch:03d}_{val_vpq_metric:.4f}'
+  monitor: "val_vpq_metric" # "val_bev_metric_cosine_similarity"
+  filename: '{epoch:03d}_{val_vpq_metric:.4f}'  # '{epoch:03d}_{val_bev_metric_cosine_similarity:.4f}'
   mode: "max"
   save_last: True
   auto_insert_metric_name: False
