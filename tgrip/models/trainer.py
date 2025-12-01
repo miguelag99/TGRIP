@@ -551,7 +551,7 @@ class PredictionTrainer(LightningModule):
             if not l_bool:
                 continue
             l_bev_loss = bev_losses[l_key]
-            l_preds = preds['semantic'][pred_key].squeeze()   # Only present
+            l_preds = preds['semantic'][pred_key].squeeze(1)   # Only present
             l_targets = batch[target_key][:,1]   # Only present
             
             loss = l_bev_loss(l_preds,l_targets)
@@ -670,7 +670,7 @@ class PredictionTrainer(LightningModule):
             if hasattr(self, f"metric_cosine_similarity_{mode}"):
                 metric = getattr(self, f"metric_cosine_similarity_{mode}")
                 metric.update(
-                    preds["semantic"]["semantic_bev"].squeeze(),
+                    preds["semantic"]["semantic_bev"].squeeze(1),
                     batch["semantic_map"][:,1]  # Only present
                 )
 
