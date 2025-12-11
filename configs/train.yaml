@@ -43,7 +43,7 @@ flags:
 model:
   text_encoder:
     _target_: tgrip.models.text_encoder.CLIPEncoder
-    model_name: "openai/clip-vit-base-patch32"
+    model_name: "openai/clip-vit-base-patch16"
   
   loss_kwargs:
     with_binimg: ${data.keep_input_binimg}
