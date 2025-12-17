@@ -8,6 +8,7 @@ _target_: tgrip.data.datamodule.NuScenesDatamodule
 version: trainval
 dataroot: ${paths.data_dir}
 hdmaproot: ${paths.data_dir}/nuscenes_processed_map
+semanticroot: ${paths.data_dir}/visual_semantic_embeds
 is_lyft: False
 
 cls_tag: TemporalNuScenesDataset

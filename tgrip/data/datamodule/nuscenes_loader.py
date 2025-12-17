@@ -31,6 +31,7 @@ class NuScenesDatamodule(pl.LightningDataModule):
         dataroot,
         hdmaproot,
         is_lyft,
+        semanticroot,
         # Grid
         grid,
         # Images
@@ -90,6 +91,7 @@ class NuScenesDatamodule(pl.LightningDataModule):
         self.is_lyft = is_lyft
         # Paths
         self.hdmaproot = hdmaproot
+        self.semanticroot = semanticroot
         # Grid
         self.grid = grid
         # Images
@@ -201,6 +203,7 @@ class NuScenesDatamodule(pl.LightningDataModule):
             save_folder=self.save_folder,
             # Paths
             hdmaproot=self.hdmaproot,
+            semanticroot=self.semanticroot,
         )
         self.valdata = partial_data(
             # Mode
@@ -305,6 +308,9 @@ def collate_batch(batch: List[Tensor]):
         "bbox_egopose",
         "bbox_egopose_aug",
         "tokens",
+        "sample_tokens",
+        "obj_tokens",
+        "obj_vis_embeds",
     ]
     keys = batch[0].keys()
     out_dict = {

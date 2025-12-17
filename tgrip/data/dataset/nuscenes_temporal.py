@@ -164,6 +164,7 @@ class TemporalNuScenesDataset(NuScenesDataset):
             "bev_aug",
             "egoTout_to_seq",
             "future_egomotion",
+            "sample_tokens"
         ]
 
         self.with_hdmap = keep_input_hdmap
@@ -206,6 +207,7 @@ class TemporalNuScenesDataset(NuScenesDataset):
             keys_to_keep.append("classes_aug")
             keys_to_keep.append("bbox_attr")
             keys_to_keep.append("bbox_attr_aug")
+            keys_to_keep.append("obj_tokens")
 
         if keep_input_lidar:
             keys_to_keep.append("lidar_img")
@@ -222,6 +224,9 @@ class TemporalNuScenesDataset(NuScenesDataset):
         if keep_input_semantic_maps:
             keys_to_keep.append("semantic_map")
             keys_to_keep.append("semantic_map_aug")
+            keys_to_keep.append("vis_semantic_map")
+            keys_to_keep.append("vis_semantic_map_aug")
+            keys_to_keep.append("obj_vis_embeds")
 
         self.keys_to_keep = keys_to_keep
 
@@ -535,8 +540,9 @@ class TemporalNuScenesDataset(NuScenesDataset):
                         "centers_aug",
                         "bboxes",
                         "bboxes_aug",
+                        "obj_tokens",
+                        "obj_vis_embeds",
                         "tokens",
-                        "complex_semantic_data"
                     ]
                     else [data_t[k] for data_t in data_bev]
                 )
@@ -616,6 +622,7 @@ class TemporalNuScenesDataset(NuScenesDataset):
         # Get BEV records:
         bev_records_T = records[self.bev_T_index]
         bev_records_P = records[self.bev_P_index]
+        out_dict.update({"sample_tokens": bev_records_T})
 
         # Get query-aug transformation matrix
         bev_aug = self._get_inputs_bevaug(bev_records_P)

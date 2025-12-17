@@ -24,6 +24,7 @@ from nuscenes.utils.geometry_utils import BoxVisibility, transform_matrix
 from nuscenes.utils.splits import create_splits_scenes
 from pyquaternion import Quaternion
 from lightning.pytorch.utilities.rank_zero import rank_zero_only
+from safetensors.torch import load_file
 
 from tgrip.utils.geom import (
     GeomScaler,
@@ -117,6 +118,7 @@ class NuScenesDataset(torch.utils.data.Dataset):
         keep_input_persp: bool = False,
         # Path
         hdmaproot: str = "",
+        semanticroot: str = "",
     ):
         # Lyft dataset
         self.is_lyft = is_lyft
@@ -187,6 +189,7 @@ class NuScenesDataset(torch.utils.data.Dataset):
 
         # Paths
         self.hdmaproot = hdmaproot
+        self.semanticroot = semanticroot
 
     @rank_zero_only
     def _print_desc(self):
@@ -551,6 +554,8 @@ class NuScenesDataset(torch.utils.data.Dataset):
             - classes: (Tensor[torch.uint8]) contains annotated classes.
             - centers: (Tensor[torch.float32]) contains center coordinates.
             - semantic_map: (Tensor[torch.uint8]) contains bev semantic map with corresponding id in CLASS_CONDITIONS.
+            - vis_semantic_map: (Tensor[torch.uint8]) contains 
+            - obj_vis_embeds: (Tensor[torch.float32]) contains CLIP visual embeddings for each object.
         """
         # Alias
         h, w = self.nx[0], self.nx[1]
@@ -586,12 +591,15 @@ class NuScenesDataset(torch.utils.data.Dataset):
         centerness, centerness_aug = torch.zeros(2, 1, h, w)
         centers, centers_aug = [], []
 
-        # -> Bounding box attributes
+        # -> BEV Bounding box attributes
         bbox_attr, bbox_attr_aug = [], []
 
-        # -> Bounding boxes
+        # -> BEV Bounding boxes
         bboxes, bboxes_aug = {}, {}
         visible_bbox = []
+                
+        # -> Object tokens
+        obj_tokens = []
         
         # -> Flow map
         flow_map = torch.zeros(2, h, w)
@@ -600,7 +608,12 @@ class NuScenesDataset(torch.utils.data.Dataset):
         semantic_map, semantic_map_aug = (
             torch.zeros(1, h, w, dtype=torch.uint8),
             torch.zeros(1, h, w, dtype=torch.uint8),
+        )        
+        vis_semantic_map, vis_semantic_map_aug = (
+            torch.zeros(1, h, w, dtype=torch.uint8),
+            torch.zeros(1, h, w, dtype=torch.uint8),
         )
+        vis_semantics_embeds = []
 
         # Are augmentations activated ?
         bool_aug_activated = not np.allclose(bev_aug, np.eye(4))
@@ -622,7 +635,16 @@ class NuScenesDataset(torch.utils.data.Dataset):
             anns = anns + [inst_egopose]
 
         min_vis = self.img_params["min_visibility"]
-
+        
+        # If we need the CLIP features for each instance
+        if "obj_vis_embeds" in self.keys_to_keep:
+            instance_visual_embeds = load_file(
+                os.path.join(
+                    self.semanticroot, f"semantic_data_{rec['token']}.safetensors"
+                ),
+                device="cpu",
+            )
+                
         # Loop over annotations
         for i, tok in enumerate(anns):
             # Given w.r.t the global coordinate system.
@@ -642,7 +664,11 @@ class NuScenesDataset(torch.utils.data.Dataset):
             else:
                 is_visible = True
                 visible_bbox.append(True)
-
+            
+            # Object tokens
+            if is_visible:
+                obj_tokens.append(inst["token"])
+            
             # Dynamic tag
             if len(inst["attribute_tokens"]) > 0 and (not self.is_lyft):
                 assert len(inst["attribute_tokens"]) == 1
@@ -692,7 +718,23 @@ class NuScenesDataset(torch.utils.data.Dataset):
                 semantic_map = self._fill_bev_region(
                     bbox_img, semantic_map, embed_cls
                 )
-            
+                
+                if inst["token"] in instance_visual_embeds:
+                    vis_semantics_embeds.append(
+                        instance_visual_embeds[inst["token"]].unsqueeze(0)
+                    )
+                
+                else:
+                # If the visual embed is not found, the object is probably occluded or out of range.
+                # In that case we fill with background embedding to remove it from the BEV GT.
+                    vis_semantics_embeds.append(
+                        self.class_conditions.get("background")["embedding"].cpu()
+                    )
+                
+                vis_semantic_map = self._fill_bev_region(
+                    bbox_img, vis_semantic_map, torch.tensor(len(vis_semantics_embeds))
+                )
+                
             if bool_aug_activated:
                 (
                     bbox_aug,(center_aug, bbox_h_aug, bbox_w_aug),offsets_aug,
@@ -706,6 +748,10 @@ class NuScenesDataset(torch.utils.data.Dataset):
                     semantic_map_aug = self._fill_bev_region(
                         bbox_aug_img, semantic_map_aug, embed_cls
                     )
+                    
+                    vis_semantic_map_aug = self._fill_bev_region(
+                        bbox_aug_img, vis_semantic_map_aug, torch.tensor(len(vis_semantics_embeds))
+                    ) 
                     
             # fmt: on
 
@@ -738,6 +784,9 @@ class NuScenesDataset(torch.utils.data.Dataset):
                     bbox_attr_aug.append([bbox_h_aug, bbox_w_aug])
                 bboxes_aug[tok] = bbox_aug
 
+        vis_semantics_embeds =(torch.cat(vis_semantics_embeds, dim=0)
+            if len(vis_semantics_embeds) > 0 else torch.empty(0, dtype=torch.float32))
+
         # Add egopose bounding box
         (*_, bbox_egopose_img, bbox_egopose_aug_img) = self._get_bbox_region_in_image(
             inst_egopose, egoPout_to_global, bev_aug
@@ -766,6 +815,7 @@ class NuScenesDataset(torch.utils.data.Dataset):
             centerness_aug = centerness.clone()
             offsets_aug = offsets.clone()
             semantic_map_aug = semantic_map.clone()
+            vis_semantic_map_aug = vis_semantic_map.clone()
 
         # Can not stack empty list
         if len(centers) > 0:
@@ -892,6 +942,8 @@ class NuScenesDataset(torch.utils.data.Dataset):
             instance_aug,
             semantic_map,
             semantic_map_aug,
+            vis_semantic_map,
+            vis_semantic_map_aug,
         ] = [
             prepare_img_axis(x, self.to_cam_ref)
             for x in [
@@ -917,6 +969,8 @@ class NuScenesDataset(torch.utils.data.Dataset):
                 instance_aug,
                 semantic_map,
                 semantic_map_aug,
+                vis_semantic_map,
+                vis_semantic_map_aug,
             ]
         ]
 
@@ -951,8 +1005,12 @@ class NuScenesDataset(torch.utils.data.Dataset):
             "bbox_attr_aug": bbox_attr_aug,
             "instance": instance,
             "instance_aug": instance_aug,
+            "obj_tokens": obj_tokens,
             "semantic_map": semantic_map,
             "semantic_map_aug": semantic_map_aug,
+            "vis_semantic_map": vis_semantic_map,
+            "vis_semantic_map_aug": vis_semantic_map_aug,
+            "obj_vis_embeds": vis_semantics_embeds
         }
 
     def _get_offset_map_from_center_bbox(self, grid, center_bbox):
