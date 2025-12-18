@@ -59,7 +59,9 @@ def generate_semantic_bev(cfg: DictConfig) -> None:
     cfg.data.img_params.zoom_lim = [1.0, 1.0]
     cfg.data.img_params.rot_lim = [0.0, 0.0]
     
-    cfg.data.version = 'mini'
+    cfg.data.img_params.min_visibility = 2  # Remove boxes with not enough visibility
+    
+    cfg.data.version = 'trainval'
     cfg.data.train_shuffle = False
 
     # Only load present info

@@ -26,10 +26,9 @@ profile: False
 
 # simply provide checkpoint path to evaluate
 ckpt:
-  path: "checkpoints/BEVPredFormer_scale05.ckpt"
+  path: "checkpoints/simple_semantic_test.ckpt"
   model:
-    freeze: ['net.backbone', 'net.neck', 'net.view_transform', 'net.decoder', 'net.temporal', 
-            'net.heads', 'net.coord_selector', 'net.query_gen']
+    freeze: []
     load: "all"
 
 # seed for random number generators in pytorch, numpy and python.random

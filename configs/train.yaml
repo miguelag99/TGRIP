@@ -26,10 +26,11 @@ profile: False
 # simply provide checkpoint path to resume training
 ckpt:
   resume: False
-  path: null
+  path: 'checkpoints/BEVPredFormer_scale05.ckpt'
   model:
-    freeze: ['net.text_encoder']
-    load: 'all'
+    freeze: null
+    load: ['net.backbone', 'net.neck', 'net.view_transform', 'net.decoder', 'net.coord_selector',
+            'net.temporal', 'net.query_gen', 'net.heads']
 
 # seed for random number generators in pytorch, numpy and python.random
 seed: null

@@ -85,7 +85,7 @@ class PredictionTrainer(LightningModule):
 
             self.conditions = CLASS_CONDITIONS
             for k, v in self.conditions.items():
-                v["embedding"] = self.text_encoder(v["text"])
+                v["embedding"] = self.text_encoder(v["text"]).cpu().detach()
         
         # Args
         self._print_info(dict_losses, dict_metrics)
@@ -348,13 +348,58 @@ class PredictionTrainer(LightningModule):
         batch['semantic_map'] = final_semantics
         batch['semantic_map_aug'] = final_semantics_aug
         
+    def _fill_visual_semantic_maps(self, batch, bs):
+        """Fills visual semantic maps with true CLIP IMAGE embeddings instead of class based
+        embeddings.
+        """
+        bev_h, bev_w = batch["vis_semantic_map"].shape[-2:]
+        tout = batch["vis_semantic_map"].shape[1]
+        text_dim = 512  # CLIP text embedding dimension
+        device = batch["vis_semantic_map"].device
+        
+        base_shape = (bs, tout, text_dim, bev_h, bev_w)
+        dtype = torch.float32
+        final_semantics = torch.zeros(
+            base_shape, device=device, dtype=dtype
+        )
+        final_semantics_aug = torch.zeros_like(
+            final_semantics
+        )
+        embeds = batch['obj_vis_embeds']  # bs, T, N, 512
+        
+        for b in range(bs):
+            for t in range(tout):
+                for i, embed in enumerate(embeds[b][t]):  # N, 512
+                    embedding = embed.to(dtype).to(device)
+                    embedding_expanded = embedding.view(-1, 1, 1)
+                    
+                    mask = (batch["vis_semantic_map"][b][t] == (i + 1)).to(device)  # 0 is background
+                    mask_aug = (batch["vis_semantic_map_aug"][b][t] == (i + 1)).to(device)
+                    mask_expanded = mask.expand(embedding_expanded.shape[0], -1, -1)
+                    mask_aug_expanded = mask_aug.expand_as(mask_expanded)
+                    
+                    final_semantics [b, t] = torch.where(
+                        mask_expanded,
+                        embedding_expanded,
+                        final_semantics[b, t],
+                    )
+                    final_semantics_aug[b, t] = torch.where(
+                        mask_aug_expanded,
+                        embedding_expanded,
+                        final_semantics_aug[b, t],
+                    )
+                            
+        batch['vis_semantic_map'] = final_semantics
+        batch['vis_semantic_map_aug'] = final_semantics_aug
+        
     # Process
     def common_step(self, batch, step, mode="train", batch_idx=None):
         """Common step: prepare inputs, forward pass, compute losses and metrics."""
         bs = batch['imgs'].shape[0]
         # # Create final semantic maps directly in GPU if needed
         if self.trainer.datamodule.keep_input_semantic_maps:
-            self._fill_semantic_maps(batch, bs)
+            # self._fill_semantic_maps(batch, bs)
+            self._fill_visual_semantic_maps(batch, bs)
         
         # Augmentations:
         # Change reference and consider the augmented BEV as GT.
@@ -545,7 +590,7 @@ class PredictionTrainer(LightningModule):
         for l_key, pred_key, target_key, l_bool in zip(
             ["semantic_similarity"],
             ["semantic_bev"],
-            ["semantic_map"],
+            ["vis_semantic_map"],
             [self.with_semantic_map],
         ):
             if not l_bool:

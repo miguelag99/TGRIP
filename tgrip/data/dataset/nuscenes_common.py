@@ -728,7 +728,7 @@ class NuScenesDataset(torch.utils.data.Dataset):
                 # If the visual embed is not found, the object is probably occluded or out of range.
                 # In that case we fill with background embedding to remove it from the BEV GT.
                     vis_semantics_embeds.append(
-                        self.class_conditions.get("background")["embedding"].cpu()
+                        self.class_conditions.get("background")["embedding"]
                     )
                 
                 vis_semantic_map = self._fill_bev_region(
