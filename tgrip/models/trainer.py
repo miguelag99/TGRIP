@@ -716,7 +716,7 @@ class PredictionTrainer(LightningModule):
                 metric = getattr(self, f"metric_cosine_similarity_{mode}")
                 metric.update(
                     preds["semantic"]["semantic_bev"].squeeze(1),
-                    batch["semantic_map"][:,1]  # Only present
+                    batch["vis_semantic_map"][:,1]  # Only present
                 )
 
     def _init_preds_dict_for_vis(self, preds):
