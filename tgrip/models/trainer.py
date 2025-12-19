@@ -359,12 +359,16 @@ class PredictionTrainer(LightningModule):
         
         base_shape = (bs, tout, text_dim, bev_h, bev_w)
         dtype = torch.float32
-        final_semantics = torch.zeros(
-            base_shape, device=device, dtype=dtype
+
+        background_embed = (
+            self.conditions["background"]["embedding"].to(dtype).to(device)
         )
-        final_semantics_aug = torch.zeros_like(
-            final_semantics
+
+        final_semantics = (
+            background_embed.view(1, 1, -1, 1, 1).expand(base_shape).clone()
         )
+        final_semantics_aug = final_semantics.clone()
+        
         embeds = batch['obj_vis_embeds']  # bs, T, N, 512
         
         for b in range(bs):

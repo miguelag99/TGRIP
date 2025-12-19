@@ -11,17 +11,17 @@ VELOCITY_CONDITIONS = {
 }
 
 CLASS_CONDITIONS = {
-    "background": {"text": "Background", "idx": 0},
-    "vehicle.bicycle": {"text": "Bicycle", "idx": 1},
-    "vehicle.bus.bendy": {"text": "Bus", "idx": 2},
-    "vehicle.bus.rigid": {"text": "Bus", "idx": 3},
-    "vehicle.car": {"text": "Car", "idx": 4},
-    "vehicle.construction": {"text": "Construction Vehicle", "idx": 5},
-    "vehicle.emergency.ambulance": {"text": "Ambulance", "idx": 6},
-    "vehicle.emergency.police": {"text": "Police Car", "idx": 7},
-    "vehicle.motorcycle": {"text": "Motorcycle", "idx": 8},
-    "vehicle.trailer": {"text": "Trailer", "idx": 9},
-    "vehicle.truck": {"text": "Truck", "idx": 10},
+    "background": {"text": "Empty background with no objects", "idx": 0},
+    "vehicle.bicycle": {"text": "A photo of a bicycle", "idx": 1},
+    "vehicle.bus.bendy": {"text": "A photo of a bus", "idx": 2},
+    "vehicle.bus.rigid": {"text": "A photo of a bus", "idx": 3},
+    "vehicle.car": {"text": "A photo of a car", "idx": 4},
+    "vehicle.construction": {"text": "A photo of a construction vehicle", "idx": 5},
+    "vehicle.emergency.ambulance": {"text": "A photo of an ambulance", "idx": 6},
+    "vehicle.emergency.police": {"text": "A photo of a police car", "idx": 7},
+    "vehicle.motorcycle": {"text": "A photo of a motorcycle", "idx": 8},
+    "vehicle.trailer": {"text": "A photo of a trailer", "idx": 9},
+    "vehicle.truck": {"text": "A photo of a truck", "idx": 10},
 }
 
 POSITIONAL_CONDITIONS= {
