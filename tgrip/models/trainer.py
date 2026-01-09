@@ -395,6 +395,24 @@ class PredictionTrainer(LightningModule):
                             
         batch['vis_semantic_map'] = final_semantics
         batch['vis_semantic_map_aug'] = final_semantics_aug
+
+    def _fuse_semantic_maps(
+        self, batch, keys_to_fuse=["semantic_map", "vis_semantic_map"]
+    ):
+        """Fuses semantic maps by concatenating along the channel dimension."""
+        batch['fused_semantic_map'] = torch.zeros_like(batch['semantic_map'])
+        batch['fused_semantic_map_aug'] = torch.zeros_like(batch['semantic_map_aug'])
+        
+        # Fuse the semantic maps by taking the mean along the channel dimension
+        maps = [batch[k] for k in keys_to_fuse if k in batch]
+        maps_aug = [batch[f"{k}_aug"] for k in keys_to_fuse if f"{k}_aug" in batch]
+
+        if maps:
+            batch['fused_semantic_map'] = torch.mean(torch.stack(maps, dim=2), dim=2)
+        if maps_aug:
+            batch["fused_semantic_map_aug"] = torch.mean(
+                torch.stack(maps_aug, dim=2), dim=2
+            )
         
     # Process
     def common_step(self, batch, step, mode="train", batch_idx=None):
@@ -402,8 +420,11 @@ class PredictionTrainer(LightningModule):
         bs = batch['imgs'].shape[0]
         # # Create final semantic maps directly in GPU if needed
         if self.trainer.datamodule.keep_input_semantic_maps:
-            # self._fill_semantic_maps(batch, bs)
+            self._fill_semantic_maps(batch, bs)
             self._fill_visual_semantic_maps(batch, bs)
+            self._fuse_semantic_maps(
+                batch, keys_to_fuse=["semantic_map", "vis_semantic_map"]
+            )
         
         # Augmentations:
         # Change reference and consider the augmented BEV as GT.
@@ -594,7 +615,7 @@ class PredictionTrainer(LightningModule):
         for l_key, pred_key, target_key, l_bool in zip(
             ["semantic_similarity"],
             ["semantic_bev"],
-            ["vis_semantic_map"],
+            ["fused_semantic_map"],
             [self.with_semantic_map],
         ):
             if not l_bool:
