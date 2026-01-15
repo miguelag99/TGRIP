@@ -1,0 +1,5 @@
+defaults:
+  - _self_
+
+_target_: tgrip.models.text_encoder.SiglipEncoder
+model_name: "google/siglip2-base-patch16-224"
