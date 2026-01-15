@@ -4,13 +4,8 @@ import torch
 import numpy as np
 import os
 
-from transformers import (
-    pipeline,
-    Sam3Processor,
-    Sam3Model,
-    CLIPProcessor,
-    CLIPModel,
-)
+from transformers import AutoModel, AutoProcessor
+
 from nuscenes.utils.geometry_utils import view_points, BoxVisibility
 from einops import rearrange
 from omegaconf import DictConfig
@@ -41,11 +36,10 @@ def async_save(tensors, filename):
         print(f"Failed to save {filename}: {e}")
 
 @torch.no_grad()
-def generate_semantic_bev(cfg: DictConfig) -> None:
-    """This functions generates the corresponding semantic maps in the
-    different image planes. SAM3 localizes the instances and CLIP-V generates
-    the text aligned feature to fill the map.
-
+def generate_semantic_embeds(cfg: DictConfig) -> None:
+    """This functions generates the corresponding semantic embed for each object
+    in each frame using CLIP visual encoder.
+    
     Args:
         cfg (DictConfig): Hydra config object.
     """
@@ -82,8 +76,8 @@ def generate_semantic_bev(cfg: DictConfig) -> None:
     datamodule.setup()
     
     # CLIP model
-    clip = CLIPModel.from_pretrained("openai/clip-vit-base-patch16").to(device)
-    clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16")
+    siglip = AutoModel.from_pretrained("google/siglip2-base-patch16-224").to(device)
+    siglip_processor = AutoProcessor.from_pretrained("google/siglip2-base-patch16-224")
         
     # Generate train samples
     dataset = datamodule.train_dataloader()
@@ -128,15 +122,15 @@ def generate_semantic_bev(cfg: DictConfig) -> None:
             
             if len(img_crops) > 0:
                 # Get CLIP visual features
-                clip_inputs = clip_processor(
+                siglip_inputs = siglip_processor(
                     images=img_crops,
                     return_tensors="pt",
                     padding=True,
                     do_center_crop=False,
                     do_resize=True,
                 ).to(device)
-                clip_features = clip.get_image_features(**clip_inputs)  # (1, 512)
-                clip_features = clip_features / clip_features.norm(
+                siglip_features = siglip.get_image_features(**siglip_inputs)  # (1, 512)
+                siglip_features = siglip_features / siglip_features.norm(
                     p=2, dim=-1, keepdim=True
                 )
                 
@@ -145,24 +139,24 @@ def generate_semantic_bev(cfg: DictConfig) -> None:
                 if gt.token in crops_info:
                     # If the object is in multiple cameras, keep the largest crop
                     if current_area > crops_info[gt.token]["area"]:
-                        batch_data[gt.token] = clip_features[idx].cpu().contiguous()
+                        batch_data[gt.token] = siglip_features[idx].cpu().contiguous()
                         crops_info[gt.token] = {
                             "cam_idx": i,
                             "area": current_area,
                             "bbox": (x_min, y_min, x_max, y_max)
                         }
                 else:
-                    batch_data[gt.token] = clip_features[idx].cpu().contiguous()
+                    batch_data[gt.token] = siglip_features[idx].cpu().contiguous()
                     crops_info[gt.token] = {
                         "cam_idx": i,
                         "area": current_area,
                         "bbox": (x_min, y_min, x_max, y_max)
                     }
-                    
+        
         # Save processed data for sample and image
         filename = f"{dataset.dataset.semanticroot}/semantic_data_{scene_token['token']}.safetensors"
         save_executor.submit(save_file, batch_data, filename)
-    
+        
     # Generate val samples
     dataset = datamodule.val_dataloader()
     for batch in tqdm(dataset):
@@ -202,15 +196,15 @@ def generate_semantic_bev(cfg: DictConfig) -> None:
             
             if len(img_crops) > 0:
                 # Get CLIP visual features
-                clip_inputs = clip_processor(
+                siglip_inputs = siglip_processor(
                     images=img_crops,
                     return_tensors="pt",
                     padding=True,
                     do_center_crop=False,
                     do_resize=True,
                 ).to(device)
-                clip_features = clip.get_image_features(**clip_inputs)  # (1, 512)
-                clip_features = clip_features / clip_features.norm(
+                siglip_features = siglip.get_image_features(**siglip_inputs)  # (1, 512)
+                siglip_features = siglip_features / siglip_features.norm(
                     p=2, dim=-1, keepdim=True
                 )
                 
@@ -219,14 +213,14 @@ def generate_semantic_bev(cfg: DictConfig) -> None:
                 if gt.token in crops_info:
                     # If the object is in multiple cameras, keep the largest crop
                     if current_area > crops_info[gt.token]["area"]:
-                        batch_data[gt.token] = clip_features[idx].cpu().contiguous()
+                        batch_data[gt.token] = siglip_features[idx].cpu().contiguous()
                         crops_info[gt.token] = {
                             "cam_idx": i,
                             "area": current_area,
                             "bbox": (x_min, y_min, x_max, y_max)
                         }
                 else:
-                    batch_data[gt.token] = clip_features[idx].cpu().contiguous()
+                    batch_data[gt.token] = siglip_features[idx].cpu().contiguous()
                     crops_info[gt.token] = {
                         "cam_idx": i,
                         "area": current_area,
@@ -255,10 +249,10 @@ def get_sam_masks(model, processor, image, text_prompt, device):
     )[0]
     return results
 
-@hydra.main(version_base="1.3", config_path="../configs", config_name="val.yaml")
+@hydra.main(version_base="1.3", config_path="../../configs", config_name="val.yaml")
 def main(cfg: DictConfig) -> Optional[float]:
     utils.modif_config_based_on_flags(cfg)
-    generate_semantic_bev(cfg)
+    generate_semantic_embeds(cfg)
 
 if __name__ == "__main__":
     main()
