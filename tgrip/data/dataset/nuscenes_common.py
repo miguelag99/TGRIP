@@ -42,6 +42,7 @@ from tgrip.utils.imgs import (
     get_patch_box_from_trans,
     prepare_img_axis,
 )
+from tgrip.utils import FixedNuScenesMap
 
 from .lyft_common import TRAIN_LYFT_INDICES, VAL_LYFT_INDICES
 
@@ -51,6 +52,22 @@ from .lyft_common import TRAIN_LYFT_INDICES, VAL_LYFT_INDICES
 IGNORE_INDEX = 255
 MAP_DYNAMIC_TAG = {"parked": 0, "moving": 1, "stopped": 2, "other": 3}
 VISIBILITY_TAG = {"0_40": 1, "40_60": 2, "60_80": 3, "80_100": 4, "Back": 255}
+MAPS = [
+    "boston-seaport",
+    "singapore-onenorth",
+    "singapore-hollandvillage",
+    "singapore-queenstown",
+]
+LAYER_NAMES = [
+    "lane",
+    "road_segment",
+    "drivable_area",
+    "road_divider",
+    "lane_divider",
+    "stop_line",
+    "ped_crossing",
+    "walkway",
+]
 HDMAP_DICT = {
     k: i
     for i, k in enumerate(
@@ -116,6 +133,7 @@ class NuScenesDataset(torch.utils.data.Dataset):
         # Outputs
         hdmap_names: List[str] = [],
         keep_input_persp: bool = False,
+        keep_hdmap: bool = False,
         # Path
         hdmaproot: str = "",
         semanticroot: str = "",
@@ -148,9 +166,17 @@ class NuScenesDataset(torch.utils.data.Dataset):
             ]
             self.filters_cat = filters_cat
         self.class_to_idx = self._init_class_mapping(filters_cat)
+        
         # -> HDMaps
         self.hdmap_names = hdmap_names
+        self.keep_hdmap = keep_hdmap
         self.hdmap_radius = 150
+        self.maps = {}
+        if self.keep_hdmap:
+            for map_name in MAPS:
+                self.maps[map_name] = FixedNuScenesMap(
+                    dataroot=self.dataroot, map_name=map_name
+                )
 
         # Filters
         self.only_object_center_in = only_object_center_in
@@ -1238,37 +1264,81 @@ class NuScenesDataset(torch.utils.data.Dataset):
             "ego_pose",
             self.nusc.get("sample_data", rec["data"]["LIDAR_TOP"])["ego_pose_token"],
         )
+        ego_rotation = Quaternion(egopose["rotation"]).yaw_pitch_roll[0] * 180 / np.pi
+        ego_translation = np.array(egopose["translation"])[:2]
+        map_name = self.nusc.get("log", scene_token["log_token"])["location"]
+                        
+        x_min = np.round(ego_translation[0] - self.grid['xbound'][1])
+        x_max = np.round(ego_translation[0] + self.grid['xbound'][1])
+        y_min = np.round(ego_translation[1] - self.grid['ybound'][1])
+        y_max = np.round(ego_translation[1] + self.grid['ybound'][1])
+        x_size = x_max - x_min
+        y_size = y_max - y_min
+        patch_box = (
+            x_min + 0.5 * (x_max - x_min),
+            y_min + 0.5 * (y_max - y_min),
+            y_size,
+            x_size,
+        )
+        
+        map_masks = self.maps[map_name].get_map_mask(
+            patch_box, ego_rotation, self.hdmap_names, (h, w)
+        )
+        
+        # Apply bev augmentation to map
+        ego_yaw = Quaternion(egopose["rotation"]).yaw_pitch_roll[0]
+        R_aug = bev_aug[:2, :2]
+        t_aug = bev_aug[:2, 3]
+        aug_yaw = np.arctan2(R_aug[1, 0], R_aug[0, 0])
+        aug_ego_rotation = (ego_yaw + aug_yaw) * 180 / np.pi
 
-        # Read pre-processed files
-        map_mask = np.load(open(f"{self.hdmaproot}/map_0.1/{scene_name}.npy", "rb"))
-
-        rec_info = json.load(
-            open(f"{self.hdmaproot}/label/{self.split}/{scene_name}.json", "r")
-        )[egopose["token"]]
-        patch_box = np.loadtxt(
-            open(f"{self.hdmaproot}/map_0.1/meta_{scene_name}.txt", "r")
+        # Rotate and translate ego position according to augmentation
+        aug_ego_translation = ego_translation + (
+            np.array([
+            np.cos(ego_yaw) * t_aug[0] - np.sin(ego_yaw) * t_aug[1],
+            np.sin(ego_yaw) * t_aug[0] + np.cos(ego_yaw) * t_aug[1]
+            ])
         )
 
-        # Extract info from files.
-        margin = rec_info["margin"]
-        patch_angle = float(rec_info["rot"]) * 180 / np.pi
-        trans_xy = np.array([rec_info["trans_x"], rec_info["trans_y"]])
+        x_min = np.round(aug_ego_translation[0] - self.grid['xbound'][1])
+        x_max = np.round(aug_ego_translation[0] + self.grid['xbound'][1])
+        y_min = np.round(aug_ego_translation[1] - self.grid['ybound'][1])
+        y_max = np.round(aug_ego_translation[1] + self.grid['ybound'][1])
+        x_size = x_max - x_min
+        y_size = y_max - y_min
+        aug_patch_box = (
+            x_min + 0.5 * (x_max - x_min),
+            y_min + 0.5 * (y_max - y_min),
+            y_size,
+            x_size,
+        )
+        
+        map_masks_aug = self.maps[map_name].get_map_mask(
+            aug_patch_box, aug_ego_rotation, self.hdmap_names, (h, w)
+        )
+        
+        hdmap = np.zeros_like(map_masks[0], dtype=np.uint8)
+        hdmap_aug = np.zeros_like(map_masks_aug[0], dtype=np.uint8)
+        
+        for idx, mask in enumerate(map_masks):
+            hdmap[mask > 0] = idx + 1  # Assign a unique ID for each layer
+        for idx, mask in enumerate(map_masks_aug):
+            hdmap_aug[mask > 0] = idx + 1  # Assign a unique ID for each layer
+        
+        # Swap axes to match expected orientation
+        hdmap = np.transpose(hdmap, (1, 0))
+        hdmap_aug = np.transpose(hdmap_aug, (1, 0))
 
-        # Extract image
-        patch_box_ego = get_patch_box_from_trans(trans_xy, margin)
-        trans_all_ego = np.array(patch_box_ego[:2]) - np.array(patch_box[:2])
+        # Convert to torch tensor and ensure correct dtype
+        hdmap = torch.from_numpy(hdmap.astype(np.uint8))
+        hdmap_aug = torch.from_numpy(hdmap_aug.astype(np.uint8))
 
-        # Sub mask_map
-        th, tw = trans_all_ego.astype(int)
-        map_mask_ego = get_current_map_mask(map_mask, patch_angle, tw, th)
+        # Flip both axes for correct BEV alignment
+        hdmap = hdmap.flip([0, 1])
+        hdmap_aug = hdmap_aug.flip([0, 1])
 
-        # Prepare outputs
-        keep_map = [i in self.hdmap_names for i in HDMAP_DICT.keys()]
-        hdmap = map_mask_ego[:, :, keep_map]
-        assert not self.to_cam_ref, "Not implemented with hdmap"
-        hdmap = hdmap.to(torch.uint8).flip(0, 1).permute(2, 0, 1) // 255
-        return {"hdmap": hdmap}
-
+        return {"hdmap": hdmap, "hdmap_aug": hdmap_aug}
+        
     # Other
     def choose_cams(self):
         if self.is_train and self.img_params["Ncams"] < len(self.img_params["cams"]):

@@ -51,6 +51,7 @@ class TemporalNuScenesDataset(NuScenesDataset):
         super().__init__(
             keep_input_persp=keep_input_persp,
             keep_input_lidar=keep_input_lidar,
+            keep_hdmap=keep_input_hdmap,
             *args,
             **kwargs,
         )
@@ -185,6 +186,7 @@ class TemporalNuScenesDataset(NuScenesDataset):
 
         if keep_input_hdmap:
             keys_to_keep.append("hdmap")
+            keys_to_keep.append("hdmap_aug")
 
         if keep_input_centr_offs:
             keys_to_keep.append("offsets")

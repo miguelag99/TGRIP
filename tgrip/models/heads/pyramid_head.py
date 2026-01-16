@@ -129,16 +129,16 @@ class MultiPyramidHead(nn.Module):
         )
         
         # HDMap head
-        if with_hdmap:
-            convnormact_conv_chdmap = nn.Sequential(
-                nn.Flatten(1, 2),
-                ConvNormAct(shared_out_c*self.in_seq_len, latent_dim,
-                            3, 1, False, norm, nn.ReLU),
-                nn.Conv2d(
-                    latent_dim, len(self.hdmap_names),
-                    kernel_size=1, padding=0
-                ),
-            )
+        # if with_hdmap:
+        #     convnormact_conv_chdmap = nn.Sequential(
+        #         nn.Flatten(1, 2),
+        #         ConvNormAct(shared_out_c*self.in_seq_len, latent_dim,
+        #                     3, 1, False, norm, nn.ReLU),
+        #         nn.Conv2d(
+        #             latent_dim, len(self.hdmap_names),
+        #             kernel_size=1, padding=0
+        #         ),
+        #     )
         
         # Initialize heads.
         map_out.update(
@@ -151,8 +151,8 @@ class MultiPyramidHead(nn.Module):
         )
         
         # Extra heads
-        if with_hdmap:
-            map_out.update({"hdmap": convnormact_conv_chdmap})
+        # if with_hdmap:
+        #     map_out.update({"hdmap": convnormact_conv_chdmap})
         self.map_out = map_out
 
     def forward_layers(self, x):

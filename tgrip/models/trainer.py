@@ -173,10 +173,10 @@ class PredictionTrainer(LightningModule):
             )
 
         # -> HDMap
-        if self.with_hdmap:
-            dict_metrics.update(
-                {"metric_iou_hdmap": {k: IoUMetric() for k in self.hdmap_names}}
-            )
+        # if self.with_hdmap:
+        #     dict_metrics.update(
+        #         {"metric_iou_hdmap": {k: IoUMetric() for k in self.hdmap_names}}
+        #     )
 
         # -> VPQ metric (only if flow is predicted)
         if isinstance(self.net.heads, nn.ModuleList):
@@ -234,8 +234,8 @@ class PredictionTrainer(LightningModule):
                 raise NotImplementedError(f"{cls_loss_segm} not implemented.")
 
         # -> HDMap
-        self.with_hdmap = loss_kwargs.get("with_hdmap", False)
-        self.hdmap_names = loss_kwargs.get("hdmap_names", [])
+        # self.with_hdmap = loss_kwargs.get("with_hdmap", False)
+        # self.hdmap_names = loss_kwargs.get("hdmap_names", [])
         # if self.with_hdmap:
         #     dict_losses["bev"].update({"hdmap": {}})
         #     for v, k in enumerate(self.hdmap_names):
@@ -349,13 +349,15 @@ class PredictionTrainer(LightningModule):
         batch['semantic_map_aug'] = final_semantics_aug
         
     def _fill_visual_semantic_maps(self, batch, bs):
-        """Fills visual semantic maps with true CLIP IMAGE embeddings instead of class based
+        """Fills visual semantic maps with true IMAGE embeddings instead of class based
         embeddings.
         """
         bev_h, bev_w = batch["vis_semantic_map"].shape[-2:]
         tout = batch["vis_semantic_map"].shape[1]
-        text_dim = 512  # CLIP text embedding dimension
         device = batch["vis_semantic_map"].device
+        
+        embeds = batch['obj_vis_embeds']  # bs, T, N, C
+        text_dim = embeds[0][0].shape[-1]  # text embedding dimension
         
         base_shape = (bs, tout, text_dim, bev_h, bev_w)
         dtype = torch.float32
@@ -368,9 +370,7 @@ class PredictionTrainer(LightningModule):
             background_embed.view(1, 1, -1, 1, 1).expand(base_shape).clone()
         )
         final_semantics_aug = final_semantics.clone()
-        
-        embeds = batch['obj_vis_embeds']  # bs, T, N, 512
-        
+                
         for b in range(bs):
             for t in range(tout):
                 for i, embed in enumerate(embeds[b][t]):  # N, 512
@@ -420,11 +420,11 @@ class PredictionTrainer(LightningModule):
         bs = batch['imgs'].shape[0]
         # # Create final semantic maps directly in GPU if needed
         if self.trainer.datamodule.keep_input_semantic_maps:
-            self._fill_semantic_maps(batch, bs)
+            # self._fill_semantic_maps(batch, bs)
             self._fill_visual_semantic_maps(batch, bs)
-            self._fuse_semantic_maps(
-                batch, keys_to_fuse=["semantic_map", "vis_semantic_map"]
-            )
+            # self._fuse_semantic_maps(
+            #     batch, keys_to_fuse=["semantic_map", "vis_semantic_map"]
+            # )
         
         # Augmentations:
         # Change reference and consider the augmented BEV as GT.
@@ -572,13 +572,13 @@ class PredictionTrainer(LightningModule):
             total_loss = update_total_loss(total_loss, loss, name)
 
         # -> Dictionaries:
-        # Binimg, HDMap
+        # Binimg
         for l_key, pred_key, target_key, l_mask, l_bool in zip(
-            ["binimg", "hdmap"],
-            ["binimg", "hdmap"],
-            ["binimg", "hdmap"],
-            [dict_masks["binimg"], None],
-            [self.with_binimg, self.with_hdmap],
+            ["binimg"],
+            ["binimg"],
+            ["binimg"],
+            [dict_masks["binimg"]],
+            [self.with_binimg],
         ):
             if not l_bool:
                 continue
@@ -615,7 +615,7 @@ class PredictionTrainer(LightningModule):
         for l_key, pred_key, target_key, l_bool in zip(
             ["semantic_similarity"],
             ["semantic_bev"],
-            ["fused_semantic_map"],
+            ["vis_semantic_map"],
             [self.with_semantic_map],
         ):
             if not l_bool:
@@ -736,7 +736,7 @@ class PredictionTrainer(LightningModule):
                     batch["instance"][:,1:].squeeze(2).long()
                 )
                         
-        if ("semantic_map" in batch.keys()):
+        if ("vis_semantic_map" in batch.keys()):
             if hasattr(self, f"metric_cosine_similarity_{mode}"):
                 metric = getattr(self, f"metric_cosine_similarity_{mode}")
                 metric.update(
