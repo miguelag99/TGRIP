@@ -1,14 +1,6 @@
 VEL_THRESHOLD = 0.5  # m/s
 
 # Conditions used for semantic maps are filled in dataloader using CLIP embeddings
-VELOCITY_CONDITIONS = {
-    "background": {"text": "Background", "idx": 0},
-    "vehicle.stopped": {"text": "Stopped", "idx": 1},
-    "vehicle.parked": {"text": "Stopped", "idx": 2},
-    "cycle.without_rider": {"text": "Stopped", "idx": 3},
-    "vehicle.moving": {"text": "Moving", "idx": 4},
-    "cycle.with_rider": {"text": "Moving", "idx": 5},
-}
 
 CLASS_CONDITIONS = {
     "background": {"text": "Empty background with no objects", "idx": 0},
@@ -24,12 +16,26 @@ CLASS_CONDITIONS = {
     "vehicle.truck": {"text": "A photo of a truck", "idx": 10},
 }
 
-POSITIONAL_CONDITIONS= {
-    'background': {"text": "Background", "idx": 0},
-    'front': {"text": "Front", "idx": 1},
-    'front_left': {"text": "Front Left", "idx": 2},
-    'front_right': {"text": "Front Right", "idx": 3},
-    'back_left': {"text": "Back Left", "idx": 4},
-    'back_right': {"text": "Back Right", "idx": 5},
-    'back': {"text": "Back", "idx": 6},
+MAP_LAYERS = {
+    "background": {"text": "Empty background with no objects", "idx": 0},
+    "drivable_area": {
+        "text": "A flat asphalt road surface where vehicles can travel",
+        "idx": 1,
+    },
+    "road_divider": {
+        "text": "A white or yellow painted line separating traffic lanes on a street",
+        "idx": 2,
+    },
+    "ped_crossing": {
+        "text": "A zebra crossing with white stripes for pedestrians to cross the road",
+        "idx": 3,
+    },
+    "stop_line": {
+        "text": "A thick white solid line on the road where cars must stop at an intersection",
+        "idx": 4,
+    },
+    "walkway": {
+        "text": "A paved sidewalk or pedestrian path next to the road",
+        "idx": 5,
+    },
 }

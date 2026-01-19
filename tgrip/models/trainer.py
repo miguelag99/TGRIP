@@ -16,7 +16,7 @@ from torch.cuda import max_memory_allocated, max_memory_reserved
 from einops import rearrange
 
 from tgrip.data.dataset.nuscenes_common import MAP_DYNAMIC_TAG, VISIBILITY_TAG
-from tgrip.data.dataset.semantic_data import CLASS_CONDITIONS
+from tgrip.data.dataset.semantic_data import CLASS_CONDITIONS, MAP_LAYERS
 from tgrip.loss import BCELoss, CELoss, SpatialLoss, CosineSimilarityLoss, Weighting
 from tgrip.metric import (
     IoUMetric,
@@ -33,7 +33,7 @@ from tgrip.utils import (
     print_nested_dict,
     predict_instance_segmentation,
 )
-
+    
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 class PredictionTrainer(LightningModule):
@@ -81,12 +81,18 @@ class PredictionTrainer(LightningModule):
                 text_encoder.to("cuda" if torch.cuda.is_available() else "cpu")
                 if text_encoder is not None
                 else None
-            )
-
-            self.conditions = CLASS_CONDITIONS
+            ).eval()
+            
+            self.semantic_dim = self.text_encoder.out_dim
+            self.conditions = CLASS_CONDITIONS            
             for k, v in self.conditions.items():
                 v["embedding"] = self.text_encoder(v["text"]).cpu().detach()
-        
+            
+            if loss_kwargs.with_hdmap:
+                self.hdmap_conditions = MAP_LAYERS
+                for k, v in self.hdmap_conditions.items():
+                    v["embedding"] = self.text_encoder(v["text"]).cpu().detach()           
+            
         # Args
         self._print_info(dict_losses, dict_metrics)
         self._init_val(val_kwargs)
@@ -312,18 +318,27 @@ class PredictionTrainer(LightningModule):
         
         bev_h, bev_w = batch["semantic_map"].shape[-2:]
         tout = batch["semantic_map"].shape[1]
-        text_dim = self.text_encoder.out_dim  # CLIP text embedding dimension
+        text_dim = self.semantic_dim # text embedding dimension
         device = batch["semantic_map"].device
 
         base_shape = (bs, tout, text_dim, bev_h, bev_w)
         dtype = torch.float32
-        final_semantics = torch.zeros(
-            base_shape, device=device, dtype=dtype
-        )
-        final_semantics_aug = torch.zeros_like(
-            final_semantics
-        )
-                
+        
+        if "hdmap" in batch:
+            # Use hdmap conditions for background
+            final_semantics, final_semantics_aug = self._create_semantic_hdmap(
+                batch, bs
+            )
+        else:
+            # All background
+            background_embed = (
+                self.conditions["background"]["embedding"].to(dtype).to(device)
+            )
+            final_semantics = (
+                background_embed.view(1, 1, -1, 1, 1).expand(base_shape).clone()
+            )
+            final_semantics_aug = final_semantics.clone()
+        
         for k, v in self.conditions.items():
             idx = v["idx"]
             embedding = v["embedding"].to(dtype).to(device)
@@ -361,16 +376,22 @@ class PredictionTrainer(LightningModule):
         
         base_shape = (bs, tout, text_dim, bev_h, bev_w)
         dtype = torch.float32
-
-        background_embed = (
-            self.conditions["background"]["embedding"].to(dtype).to(device)
-        )
-
-        final_semantics = (
-            background_embed.view(1, 1, -1, 1, 1).expand(base_shape).clone()
-        )
-        final_semantics_aug = final_semantics.clone()
-                
+        
+        if "hdmap" in batch:
+            # Use hdmap conditions for background
+            final_semantics, final_semantics_aug = self._create_semantic_hdmap(
+                batch, bs
+            )
+        else:
+            # All background
+            background_embed = (
+                self.conditions["background"]["embedding"].to(dtype).to(device)
+            )
+            final_semantics = (
+                background_embed.view(1, 1, -1, 1, 1).expand(base_shape).clone()
+            )
+            final_semantics_aug = final_semantics.clone()
+        
         for b in range(bs):
             for t in range(tout):
                 for i, embed in enumerate(embeds[b][t]):  # N, 512
@@ -395,6 +416,47 @@ class PredictionTrainer(LightningModule):
                             
         batch['vis_semantic_map'] = final_semantics
         batch['vis_semantic_map_aug'] = final_semantics_aug
+
+    def _create_semantic_hdmap(self, batch, bs):
+        """Create semantic hdmap with CLIP-T embeddings instead of indices.
+        """
+        
+        bev_h, bev_w = batch["hdmap"].shape[-2:]
+        tout = batch["hdmap"].shape[1]
+        text_dim = self.semantic_dim # text embedding dimension
+        device = batch["hdmap"].device
+
+        base_shape = (bs, tout, text_dim, bev_h, bev_w)
+        dtype = torch.float32
+        hdmap_semantic = torch.zeros(
+            base_shape, device=device, dtype=dtype
+        )
+        hdmap_semantic_aug = torch.zeros_like(
+            hdmap_semantic
+        )
+                
+        for k, v in self.hdmap_conditions.items():
+            idx = v["idx"]
+            embedding = v["embedding"].to(dtype).to(device)
+            embedding_expanded = embedding.view(1, 1, -1, 1, 1)
+
+            mask = (batch["hdmap"] == idx).unsqueeze(2).to(device)
+            mask_aug = (batch["hdmap_aug"] == idx).unsqueeze(2).to(device)
+            mask_expanded = mask.expand(-1, -1, embedding_expanded.shape[2], -1, -1)
+            mask_aug_expanded = mask_aug.expand_as(mask_expanded)
+
+            hdmap_semantic= torch.where(
+                mask_expanded,
+                embedding_expanded,
+                hdmap_semantic,
+            )
+            hdmap_semantic_aug = torch.where(
+                mask_aug_expanded,
+                embedding_expanded,
+                hdmap_semantic_aug,
+            )
+
+        return hdmap_semantic, hdmap_semantic_aug
 
     def _fuse_semantic_maps(
         self, batch, keys_to_fuse=["semantic_map", "vis_semantic_map"]
