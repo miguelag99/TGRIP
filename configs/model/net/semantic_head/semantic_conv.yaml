@@ -5,7 +5,7 @@ _target_: tgrip.models.heads.SemanticHead
 
 bev_dim: ${model.net.out_c.autoencoder}
 past_frames: ${model.net.in_seq_len}
-text_dim: 512
+text_dim: 512 # 512 for CLIP, 768 for Siglip
 hidden_dim: 1024
 n_hidden_layers: 2
 dropout: 0.1

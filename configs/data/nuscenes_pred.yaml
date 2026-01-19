@@ -8,7 +8,7 @@ _target_: tgrip.data.datamodule.NuScenesDatamodule
 version: trainval
 dataroot: ${paths.data_dir}
 hdmaproot: ${paths.data_dir}/nuscenes_processed_map
-semanticroot: ${paths.data_dir}/visual_semantic_embeds
+semanticroot: ${paths.data_dir}/visual_semantic_embeds_clipViTB16
 is_lyft: False
 
 cls_tag: TemporalNuScenesDataset
@@ -63,8 +63,11 @@ normalize_img: True
 keep_input_binimg: True
 keep_input_centr_offs: True
 keep_input_detection: True
-keep_input_hdmap: False
-hdmap_names: ['drivable_area']
+keep_input_hdmap: True
+hdmap_names: [
+  'drivable_area', 'road_divider',
+  'ped_crossing', 'stop_line', 'walkway'
+]
 keep_input_persp: False
 keep_input_sampling: False
 keep_input_offsets_map: False

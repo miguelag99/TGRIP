@@ -33,6 +33,7 @@ dependencies = [
     "rich>=14.1.0",
     "scikit-learn>=1.7.1",
     "scipy>=1.10.0",
+    "sentencepiece>=0.2.1",
     "setuptools>=80.9.0",
     "shapely>=1.8.5",
     "spconv-cu126>=2.3.8",
