@@ -42,6 +42,7 @@ dependencies = [
     "torch>=2.6.0",
     "torch-geometric>=2.6.1",
     "torchaudio>=2.6.0",
+    "torchinfo>=1.8.0",
     "torchmetrics>=1.0.0",
     "torchvision>=0.15.0",
     "transformers==5.0.0rc0",
