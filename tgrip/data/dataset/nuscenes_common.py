@@ -1254,36 +1254,40 @@ class NuScenesDataset(torch.utils.data.Dataset):
 
     # -> Maps
     def get_map_related_data(self, rec, bev_aug=np.eye(4)):
+        '''
+        To improve performance, this block returns the augmented map in both hdmap
+        and hdmap_aug fields.
+        ''' 
         # Alias
         h, w = self.nx[0], self.nx[1]
 
         # Tokens
         scene_token = self.nusc.get("scene", rec["scene_token"])
-        scene_name = scene_token["name"]
+        # scene_name = scene_token["name"]
         egopose = self.nusc.get(
             "ego_pose",
             self.nusc.get("sample_data", rec["data"]["LIDAR_TOP"])["ego_pose_token"],
         )
-        ego_rotation = Quaternion(egopose["rotation"]).yaw_pitch_roll[0] * 180 / np.pi
+        # ego_rotation = Quaternion(egopose["rotation"]).yaw_pitch_roll[0] * 180 / np.pi
         ego_translation = np.array(egopose["translation"])[:2]
         map_name = self.nusc.get("log", scene_token["log_token"])["location"]
                         
-        x_min = np.round(ego_translation[0] - self.grid['xbound'][1])
-        x_max = np.round(ego_translation[0] + self.grid['xbound'][1])
-        y_min = np.round(ego_translation[1] - self.grid['ybound'][1])
-        y_max = np.round(ego_translation[1] + self.grid['ybound'][1])
-        x_size = x_max - x_min
-        y_size = y_max - y_min
-        patch_box = (
-            x_min + 0.5 * (x_max - x_min),
-            y_min + 0.5 * (y_max - y_min),
-            y_size,
-            x_size,
-        )
+        # x_min = np.round(ego_translation[0] - self.grid['xbound'][1])
+        # x_max = np.round(ego_translation[0] + self.grid['xbound'][1])
+        # y_min = np.round(ego_translation[1] - self.grid['ybound'][1])
+        # y_max = np.round(ego_translation[1] + self.grid['ybound'][1])
+        # x_size = x_max - x_min
+        # y_size = y_max - y_min
+        # patch_box = (
+        #     x_min + 0.5 * (x_max - x_min),
+        #     y_min + 0.5 * (y_max - y_min),
+        #     y_size,
+        #     x_size,
+        # )
         
-        map_masks = self.maps[map_name].get_map_mask(
-            patch_box, ego_rotation, self.hdmap_names, (h, w)
-        )
+        # map_masks = self.maps[map_name].get_map_mask(
+        #     patch_box, ego_rotation, self.hdmap_names, (h, w)
+        # )
         
         # Apply bev augmentation to map
         ego_yaw = Quaternion(egopose["rotation"]).yaw_pitch_roll[0]
@@ -1317,27 +1321,27 @@ class NuScenesDataset(torch.utils.data.Dataset):
             aug_patch_box, aug_ego_rotation, self.hdmap_names, (h, w)
         )
         
-        hdmap = np.zeros_like(map_masks[0], dtype=np.uint8)
+        # hdmap = np.zeros_like(map_masks[0], dtype=np.uint8)
         hdmap_aug = np.zeros_like(map_masks_aug[0], dtype=np.uint8)
         
-        for idx, mask in enumerate(map_masks):
-            hdmap[mask > 0] = idx + 1  # Assign a unique ID for each layer
+        # for idx, mask in enumerate(map_masks):
+        #     hdmap[mask > 0] = idx + 1  # Assign a unique ID for each layer
         for idx, mask in enumerate(map_masks_aug):
             hdmap_aug[mask > 0] = idx + 1  # Assign a unique ID for each layer
         
         # Swap axes to match expected orientation
-        hdmap = np.transpose(hdmap, (1, 0))
+        # hdmap = np.transpose(hdmap, (1, 0))
         hdmap_aug = np.transpose(hdmap_aug, (1, 0))
 
         # Convert to torch tensor and ensure correct dtype
-        hdmap = torch.from_numpy(hdmap.astype(np.uint8))
+        # hdmap = torch.from_numpy(hdmap.astype(np.uint8))
         hdmap_aug = torch.from_numpy(hdmap_aug.astype(np.uint8))
 
         # Flip both axes for correct BEV alignment
-        hdmap = hdmap.flip([0, 1])
+        # hdmap = hdmap.flip([0, 1])
         hdmap_aug = hdmap_aug.flip([0, 1])
 
-        return {"hdmap": hdmap, "hdmap_aug": hdmap_aug}
+        return {"hdmap": hdmap_aug.clone(), "hdmap_aug": hdmap_aug}
         
     # Other
     def choose_cams(self):
