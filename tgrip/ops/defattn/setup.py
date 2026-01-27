@@ -43,8 +43,18 @@ def get_extensions():
             "-D__CUDA_NO_HALF_CONVERSIONS__",
             "-D__CUDA_NO_HALF2_OPERATORS__",
         ]
+        
+        # Get torch library directory for RPATH
+        torch_lib_dir = os.path.join(os.path.dirname(torch.__file__), 'lib')
+        
+        # Add RPATH to find libc10.so and other torch libraries
+        extra_link_args = [
+            f'-Wl,-rpath,{torch_lib_dir}',
+            f'-L{torch_lib_dir}',
+        ]
     else:
-        raise NotImplementedError('Cuda is not availabel')
+        raise NotImplementedError('Cuda is not available')
+        extra_link_args = []
 
     sources = [os.path.relpath(s, this_dir) for s in sources]
     include_dirs = [extensions_dir]
@@ -55,6 +65,7 @@ def get_extensions():
             include_dirs=include_dirs,
             define_macros=define_macros,
             extra_compile_args=extra_compile_args,
+            extra_link_args=extra_link_args,
         )
     ]
     return ext_modules

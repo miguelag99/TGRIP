@@ -16,6 +16,35 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
+#include <ATen/native/cuda/KernelUtils.cuh>
+
+/**
+ * @brief Macro to dispatch code for all floating point types, including float, double, half, and bfloat16.
+ *
+ * This macro simplifies the process of writing type-generic CUDA kernels or functions by automatically
+ * generating code for all supported floating point types. It leverages ATen's dispatch system to select
+ * the appropriate code path based on the input tensor's data type.
+ *
+ * @param TYPE The scalar type to dispatch on (e.g., tensor.scalar_type()).
+ * @param NAME The name of the dispatch operation (used for error messages).
+ * @param ...  The code to execute for each supported type.
+ *
+ * Internally, this macro expands to a switch statement that covers:
+ *   - float (at::kFloat)
+ *   - double (at::kDouble)
+ *   - half precision (at::kHalf)
+ *   - bfloat16 (at::kBFloat16)
+ *
+ * Usage example:
+ *   AT_DISPATCH_FLOATING_TYPES_AND_HALF_AND_BF16(
+ *       tensor.scalar_type(), "my_kernel", [&] {
+ *           // type-specific code here
+ *       });
+ */
+#define AT_DISPATCH_FLOATING_TYPES_AND_HALF_AND_BF16(TYPE, NAME, ...) \
+    AT_DISPATCH_SWITCH(                                               \
+        TYPE, NAME,                                                   \
+        AT_DISPATCH_CASE_FLOATING_TYPES_AND2(at::kHalf, at::kBFloat16, __VA_ARGS__))
 
 at::Tensor ms_deform_attn_cuda_forward(
     const at::Tensor &value, 
@@ -61,7 +90,7 @@ at::Tensor ms_deform_attn_cuda_forward(
     for (int n = 0; n < batch/im2col_step_; ++n)
     {
         auto columns = output_n.select(0, n);
-        AT_DISPATCH_FLOATING_TYPES_AND_HALF(value.scalar_type(), "ms_deform_attn_forward_cuda", ([&] {
+        AT_DISPATCH_FLOATING_TYPES_AND_HALF_AND_BF16(value.scalar_type(), "ms_deform_attn_forward_cuda", ([&] {
             ms_deformable_im2col_cuda(at::cuda::getCurrentCUDAStream(),
                 value.data<scalar_t>() + n * im2col_step_ * per_value_size,
                 spatial_shapes.data<int64_t>(),
@@ -131,7 +160,7 @@ std::vector<at::Tensor> ms_deform_attn_cuda_backward(
     for (int n = 0; n < batch/im2col_step_; ++n)
     {
         auto grad_output_g = grad_output_n.select(0, n);
-        AT_DISPATCH_FLOATING_TYPES_AND_HALF(value.scalar_type(), "ms_deform_attn_backward_cuda", ([&] {
+        AT_DISPATCH_FLOATING_TYPES_AND_HALF_AND_BF16(value.scalar_type(), "ms_deform_attn_backward_cuda", ([&] {
             ms_deformable_col2im_cuda(at::cuda::getCurrentCUDAStream(),
                                     grad_output_g.data<scalar_t>(),
                                     value.data<scalar_t>() + n * im2col_step_ * per_value_size,
