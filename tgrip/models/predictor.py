@@ -172,8 +172,9 @@ class TGRIPPredictor(Network):
             if isinstance(v, torch.Tensor):
                 dict_out[k] = rearrange(v, "(b t) c h w -> b t c h w", t=self.out_seq_len)
 
-        out_semantic_supervision.update(
-            {"semantic_bev": self.semantic_head(bev_query)}
-        )
+        if self.semantic_head is not None:
+            out_semantic_supervision.update(
+                {"semantic_bev": self.semantic_head(bev_query)}
+            )
         
         return {"bev": dict_out, "semantic": out_semantic_supervision}
