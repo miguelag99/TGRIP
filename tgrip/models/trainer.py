@@ -91,7 +91,10 @@ class PredictionTrainer(LightningModule):
             if loss_kwargs.with_hdmap:
                 self.hdmap_conditions = MAP_LAYERS
                 for k, v in self.hdmap_conditions.items():
-                    v["embedding"] = self.text_encoder(v["text"]).cpu().detach()           
+                    v["embedding"] = self.text_encoder(v["text"]).cpu().detach()
+            
+            del self.text_encoder
+            torch.cuda.empty_cache()
             
         # Args
         self._print_info(dict_losses, dict_metrics)
@@ -372,7 +375,7 @@ class PredictionTrainer(LightningModule):
         device = batch["vis_semantic_map"].device
         
         embeds = batch['obj_vis_embeds']  # bs, T, N, C
-        text_dim = embeds[0][0].shape[-1]  # text embedding dimension
+        text_dim = self.semantic_dim # text embedding dimension
         
         base_shape = (bs, tout, text_dim, bev_h, bev_w)
         dtype = torch.float32
