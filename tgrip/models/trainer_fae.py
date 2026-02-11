@@ -33,13 +33,16 @@ from tgrip.utils import (
     print_nested_dict,
     predict_instance_segmentation,
 )
+
+from tgrip.models.fae import parse_fast_and_efficient
+
     
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-class PredictionTrainer(LightningModule):
+class FaEPredictionTrainer(LightningModule):
     def __init__(
         self,
-        net,
+        net: nn.Module, # Not used, needed for configuration purposes.
         optimizer: torch.optim.Optimizer = None,
         scheduler: torch.optim.lr_scheduler = None,
         weights_kwargs={},
@@ -55,7 +58,7 @@ class PredictionTrainer(LightningModule):
     ):
         super().__init__()
 
-        self.net = net
+        self.cfg, _, self.net = parse_fast_and_efficient()
         if only_net:
             return
         
@@ -184,21 +187,11 @@ class PredictionTrainer(LightningModule):
                     }
                 }
             )
-
-        # -> HDMap
-        # if self.with_hdmap:
-        #     dict_metrics.update(
-        #         {"metric_iou_hdmap": {k: IoUMetric() for k in self.hdmap_names}}
-        #     )
-
+        
         # -> VPQ metric (only if flow is predicted)
-        if isinstance(self.net.heads, nn.ModuleList):
-            n_c = len(self.net.heads[0].class_weights)
-        else:
-            n_c = len(self.net.heads.class_weights)
         if self.with_flow:
             dict_metrics.update({"metric_vpq": PanopticMetric(
-                n_classes=n_c,
+                n_classes=2,
             )})
             
         # -> Cosine similarity for semantic map
@@ -245,25 +238,7 @@ class PredictionTrainer(LightningModule):
                 dict_losses["bev"]["binimg"]["CELoss"] = loss_segm()
             else:
                 raise NotImplementedError(f"{cls_loss_segm} not implemented.")
-
-        # -> HDMap
-        # self.with_hdmap = loss_kwargs.get("with_hdmap", False)
-        # self.hdmap_names = loss_kwargs.get("hdmap_names", [])
-        # if self.with_hdmap:
-        #     dict_losses["bev"].update({"hdmap": {}})
-        #     for v, k in enumerate(self.hdmap_names):
-        #         dict_losses["bev"]["hdmap"].update({k: loss_segm(channel_index=v)})
-
-        # -> Centerness, offsets.
-        self.with_centr_offs = loss_kwargs.get("with_centr_offs", False)
-        if self.with_centr_offs:
-            dict_losses["bev"].update(
-                {
-                    "centerness": SpatialLoss(norm=2),
-                    "offsets": SpatialLoss(norm=1, ignore_index=255.0),
-                }
-            )
-            
+                    
         # -> Flow loss
         self.with_flow = loss_kwargs.get("with_flow", False)
         if self.with_flow:
@@ -612,34 +587,7 @@ class PredictionTrainer(LightningModule):
 
         # Masks: 0 to remove, 1 to keep.
         dict_masks = self._get_masks(preds, batch)
-
-        # Single element:
-        # -> Centerness, Offsets
-        for l_dict, l_pip, l_key, pred_key, target_key, l_mask, l_bool in zip(
-            [bev_losses, bev_losses],
-            ["bev", "bev"],
-            ["centerness", "offsets"],
-            ["centerness", "offsets"],
-            ["centerness", "offsets"],
-            [dict_masks["centerness"], dict_masks["binimg"]],
-            [self.with_centr_offs, self.with_centr_offs],
-        ):
-            if not l_bool:
-                continue
-
-            l_bev_loss = l_dict[l_key]
-            l_pred = preds[l_pip][pred_key]
-            # # ! Trace only present
-            # l_target = batch[target_key][:, -1:]
-            
-            # Trace all out timestamps
-            l_target = batch[target_key]
-
-            loss = l_bev_loss(l_pred, l_target, l_mask)
-            name = f"{l_pip}/{l_key}"
-            losses.update({name: loss})
-            total_loss = update_total_loss(total_loss, loss, name)
-
+        
         # -> Dictionaries:
         # Binimg
         for l_key, pred_key, target_key, l_mask, l_bool in zip(
@@ -728,15 +676,7 @@ class PredictionTrainer(LightningModule):
                    cls_pred_binimg[:, 1:] * valid_binimg[:, 1:],
                     target_binimg[:, 1:] * valid_binimg[:, 1:],
                 )
-
-            if hasattr(self, f"metric_N_coarse_pts_{mode}"):
-                metric = getattr(self, "_".join(["metric_N_coarse_pts", mode]))
-                metric.update(preds["tracks"]["N_coarse"].unsqueeze(0))
-
-            if hasattr(self, f"metric_N_fine_pts_{mode}"):
-                metric = getattr(self, "_".join(["metric_N_fine_pts", mode]))
-                metric.update(preds["tracks"]["N_fine"].unsqueeze(0))
-
+            
             if hasattr(self, f"metric_mem_{mode}"):
                 metric = getattr(self, "_".join(["metric_mem", mode]))
                 metric.update(torch.tensor([preds["tracks"]["mem"]]))
@@ -774,20 +714,7 @@ class PredictionTrainer(LightningModule):
                     metric.update(
                         pred_binimg, target_binimg, batch["visibility"] * valid_binimg
                     )
-
-        if "hdmap" in batch.keys():
-            # -> HDMap
-            if hasattr(self, f"metric_iou_hdmap_{mode}"):
-                pred_binimg_hdmap = preds["bev"]["hdmap"].sigmoid()
-                metric_dict = getattr(self, "_".join(["metric_iou_hdmap", mode]))
-                for v, k in enumerate(self.hdmap_names):
-                    metric = metric_dict[k]
-                    metric.update(
-                        pred_binimg_hdmap[:, :, v : v + 1].contiguous(),
-                        batch["hdmap"][:, :, v : v + 1].contiguous(),
-                    )
-
-
+        
         if ("flow_map" in batch.keys()) and ("binimg" in batch.keys()):
             if hasattr(self, f"metric_vpq_{mode}"):
                 metric = getattr(self, f"metric_vpq_{mode}")

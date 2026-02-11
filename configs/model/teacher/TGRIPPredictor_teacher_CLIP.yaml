@@ -1,0 +1,133 @@
+# This config file creates the student TGRIPPredictor model for knowledge distillation training.
+# It contains the full definition in one file in order to create an independent
+# architecture from the student, which uses the other config files.
+
+name: TGRIPPredictor
+
+_target_: tgrip.models.PredictionTrainer
+only_net: true
+net:
+  _target_: tgrip.models.predictor.TGRIPPredictor
+
+  in_shape:
+    query_gen: [200,200] # bev queries
+    hit_views: 8
+    projector: [200,200,8]
+    spatial_bounds:  [-49.75, 49.75, -49.75, 49.75, -3.375, 5.375]
+    # spatial_bounds:  [-14.925, 14.925, -14.925, 14.925, -3.375, 5.375]
+
+  # If true, the temporal block will need 6 extra channels to concatenate the temporal 
+  # ego transform of the past bev features
+  use_future_ego: true
+
+  out_seq_len: 6
+  in_seq_len: 3
+
+  in_c:
+    neck: [128, 256]
+
+  out_c:
+    base_neck: 128
+    neck: 128
+    vt: 128
+    query_gen: 128
+    autoencoder: 128
+
+  backbone:
+    _target_: tgrip.models.img_encoder.EfficientVit
+    version: efficientvit_l2.r256_in1k
+    downsample: 8
+
+  neck:
+    _target_: tgrip.models.img_encoder.AGPNeck
+    align_res_layer:
+      _target_: tgrip.models.img_encoder.neck.AlignRes
+      mode: "upsample"
+      scale_factors: [1, 2]
+      in_channels: 128
+    prepare_c_layer:
+      _target_: tgrip.models.img_encoder.neck.PrepareChannel
+      in_channels: [128, 256]
+      interm_c: 128
+      out_c: 128
+      mode: "doubleconv"
+      tail_mode: "conv2d"
+    
+  query_gen:
+    _target_: tgrip.models.layers.Latent2DQueryGenerator
+    bev_shape: [200,200]
+    channels: 128
+
+  projector:
+    _target_: tgrip.models.projector.BevFormerProjector
+    spatial_bounds:  [-49.75, 49.75, -49.75, 49.75, -3.375, 5.375]
+    # spatial_bounds:  [-14.925, 14.925, -14.925, 14.925, -3.375, 5.375]
+
+  view_transform:
+    _target_: tgrip.models.view_transform.attention.DefAttnVT
+    n_layers: 6 
+    query_c: 128
+    ffn_dim: 1024
+    sa_defattn_kwargs:
+      in_c: 128
+      dropout: 0.1
+      query_shape: [200,200]
+      msdef_kwargs: 
+        n_levels: 1
+        n_heads: 4
+        n_points: 8
+    ca_defattn_kwargs:
+      in_c: 128
+      dropout: 0.1
+      msdef_kwargs:
+        num_levels: 1
+        num_heads: 4
+        num_points: 8
+
+  autoencoder:
+    _target_: tgrip.models.autoencoder.SparseUNet
+    in_c: 128
+    with_tail_conv: False
+    with_large_kernels: False
+    with_decoder_bias: False
+
+  temporal:
+    _target_: tgrip.models.temporal.DiffGuidedPredFormerTemporal
+    in_channels: ${eval:128 + 6} # Additional channels for the future ego transform
+    out_channels: 128
+    bev_size: [200,200]
+    embed_dim: 256
+    depth: 2
+    attn_depth: 1
+    num_heads: 8
+    patch_size: 4
+    num_past_frames: 3
+    dropout: 0.1
+    mlp_ratio: 4
+    up_type: convtranspose
+    attn_type: TripletTST
+    query_type: linear
+
+  heads:
+    _target_: tgrip.models.heads.MultiPyramidHead
+    shared_out_c: 128
+    latent_dim: 64
+    out_seq_len: 6
+    in_seq_len: 3
+    # Outputs
+    with_centr_offs: True
+    with_binimg: True
+    with_multiclass: True
+    class_weights: [1.0, 2.0]
+    with_flow: True
+
+  semantic_head:
+    _target_: tgrip.models.heads.SemanticHead
+    bev_dim: 128
+    past_frames: 3
+    text_dim: 512 # 512 for CLIP, 768 for Siglip
+    hidden_dim: 1024
+    n_hidden_layers: 2
+    dropout: 0.1
+
+

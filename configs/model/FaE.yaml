@@ -1,0 +1,10 @@
+defaults:
+  - _self_
+  - net/backbone: efficientvit.yaml
+  - optimizer: adamW.yaml
+  - scheduler: onecycle.yaml
+
+
+name: FaE
+
+_target_: tgrip.models.FaEPredictionTrainer
