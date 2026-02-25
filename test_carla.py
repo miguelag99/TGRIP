@@ -2,6 +2,8 @@ import carla
 import torch
 import hydra
 
+from pytorch_lightning import LightningDataModule
+
 from tgrip import utils
 
 log = utils.get_pylogger(__name__)
@@ -37,6 +39,21 @@ model = utils.load_state_model(
                     'net.coord_selector', 'net.query_gen'],
     verbose=1,
 )
+
+log.info(f"Instantiating datamodule <{predictor_cfg.data._target_}>")
+datamodule: LightningDataModule = hydra.utils.instantiate(predictor_cfg.data)
+datamodule.setup()
+dataset = datamodule.val_dataloader()
+
+x = next(iter(dataset))
+
+for k, v in x.items():
+    if isinstance(v, torch.Tensor):
+        x[k] = v.to(device)
+
+with torch.inference_mode():
+    model.eval()
+    out = model.net(**x)
 
 import pdb; pdb.set_trace()
 

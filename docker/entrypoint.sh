@@ -6,8 +6,7 @@ clear
 if [ ! -d ".venv" ]; then
   echo " .venv not found — updating virtual environment..."
   uv sync --link-mode=copy
-#   uv pip install tgrip/ops/defattn/ --no-build-isolation --link-mode=copy
-#   uv pip install tgrip/ops/gs/ --no-build-isolation --link-mode=copy
+  uv pip install CARLA/PythonAPI/carla/dist/carla-0.9.16-cp312-cp312-manylinux_2_31_x86_64.whl
   echo " ✅ .venv updated"
 fi
 
