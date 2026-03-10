@@ -63,7 +63,7 @@ normalize_img: True
 keep_input_binimg: True
 keep_input_centr_offs: True
 keep_input_detection: True
-keep_input_hdmap: True
+keep_input_hdmap: False
 hdmap_names: [
   'drivable_area', 'road_divider',
   'ped_crossing', 'stop_line', 'walkway'

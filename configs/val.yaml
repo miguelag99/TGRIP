@@ -26,7 +26,7 @@ profile: False
 
 # simply provide checkpoint path to evaluate
 ckpt:
-  path: "checkpoints/simple_semantic_test.ckpt"
+  path: "checkpoints/TGRIP_visual_semantic.ckpt"
   model:
     freeze: []
     load: "all"
