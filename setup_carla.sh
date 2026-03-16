@@ -9,8 +9,8 @@ else
     mkdir CARLA
     cd CARLA
     wget --content-disposition https://tiny.carla.org/carla-0-9-16-linux
-    tar -xf carla-0-9-16-linux
-    rm carla-0-9-16-linux
+    tar -xf CARLA_0.9.16.tar.gz
+    rm CARLA_0.9.16.tar.gz
     cd Import
     wget --content-disposition https://tiny.carla.org/additional-maps-0-9-16-linux
     cd ..
