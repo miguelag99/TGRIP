@@ -1,2 +1,2 @@
-from .pyramid_head import MultiPyramidHead
+from .pyramid_head import MultiPyramidHead, SinglePyramidHead
 from .semantic_head import SemanticHead
