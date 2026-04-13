@@ -589,6 +589,11 @@ class NuScenesDataset(torch.utils.data.Dataset):
         # Initialize
         # -> Classes
         classes, classes_aug = [], []
+        
+        # If we want more than one class, we need to keep the class of each pixel in 
+        # the binimg, otherwise we can infer it from visibility later.
+        if len(self.filters_cat) > 1:
+            binimg, binimg_aug = np.zeros((2, h, w), dtype=np.uint8)
 
         # -> Visibility
         visibility, visibility_aug = np.full((2, h, w), 255, dtype=np.uint8)
@@ -732,6 +737,20 @@ class NuScenesDataset(torch.utils.data.Dataset):
                 mobility,center_bbox_on_img,is_visible, valid_centerness,
             )
             
+            # If we need multiclass segmentation gt, fill class id according to filters_cat order.
+            if len(self.filters_cat) > 1:
+                # Determine class id based on substring matching in filters_cat (1-based)
+                cls_id = None
+                for idx, filt in enumerate(self.filters_cat, start=1):
+                    if filt in inst["category_name"]:
+                        cls_id = idx
+                        break
+                
+                val = torch.tensor(cls_id, dtype=torch.uint8).unsqueeze(0) if cls_id is not None else torch.tensor(0, dtype=torch.uint8)
+                binimg = self._fill_bev_region(bbox_img, binimg, val)
+                if bool_aug_activated:
+                    binimg_aug = self._fill_bev_region(bbox_aug_img, binimg_aug, val)
+            
             # Semantic info associated to the instance
             if 'semantic_map' in self.keys_to_keep and inst["category_name"] in DETECTION_CLS:
                 cat_name = inst["category_name"]
@@ -837,6 +856,8 @@ class NuScenesDataset(torch.utils.data.Dataset):
             bbox_attr_aug = bbox_attr.copy()
             valid_centerness_aug = valid_centerness.copy()
             instance_aug = instance.copy()
+            if len(self.filters_cat) > 1:
+                binimg_aug = binimg.copy()
             # Torch
             centerness_aug = centerness.clone()
             offsets_aug = offsets.clone()
@@ -933,10 +954,15 @@ class NuScenesDataset(torch.utils.data.Dataset):
             ]
         ]
 
-        # Infer binimg from visibility
-        binimg, binimg_aug = [
-            torch.floor(1 - x // 255) for x in [visibility, visibility_aug]
-        ]
+        # Infer binimg from visibility if only one class, otherwise fuse visibility with pregenerated binimg.
+        if len(self.filters_cat) == 1:
+            binimg, binimg_aug = [
+                torch.floor(1 - x // 255) for x in [visibility, visibility_aug]
+            ]
+        elif len(self.filters_cat) > 1:
+            binimg, binimg_aug = (torch.from_numpy(x).unsqueeze(0) for x in [binimg, binimg_aug])
+            binimg = torch.where(visibility == 255, torch.zeros_like(binimg), binimg)
+            binimg_aug = torch.where(visibility_aug == 255, torch.zeros_like(binimg_aug), binimg_aug)
 
         # BEV validity.
         valid_binimg = visibility >= min_vis
@@ -1126,7 +1152,7 @@ class NuScenesDataset(torch.utils.data.Dataset):
     def _fill_bev_region(
         self,
         bbox_img,
-        semantic_map,
+        bev_map,
         value,
     ) -> torch.Tensor:
 
@@ -1134,11 +1160,15 @@ class NuScenesDataset(torch.utils.data.Dataset):
         poly_region_img_rd = self.geomscaler.pts_from_spatial_to_img(bbox_img)
         poly_region_img_rd = (np.round(poly_region_img_rd)).astype(np.int32)
                   
-        mask = np.zeros(semantic_map.shape[-2:], dtype=np.uint8)
+        mask = np.zeros(bev_map.shape[-2:], dtype=np.uint8)
         cv2.fillConvexPoly(mask, poly_region_img_rd, 1)
-        semantic_map[:, mask == 1] = value.unsqueeze(-1)
+        
+        if len(bev_map.shape) == 3:
+            bev_map[:, mask == 1] = value.unsqueeze(-1)
+        elif len(bev_map.shape) == 2:
+            bev_map[mask == 1] = value
 
-        return semantic_map
+        return bev_map
 
     def _get_outputs_bev(
         self,

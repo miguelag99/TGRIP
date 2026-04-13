@@ -67,9 +67,9 @@ class PredictionTrainer(LightningModule):
 
         # Metrics
         dict_metrics = self._init_metric(metric_kwargs)
-        self.metric_test = IntersectionOverUnion(
-            n_classes = 2,
-        )
+        # self.metric_test = IntersectionOverUnion(
+        #     n_classes = 2,
+        # )
 
         # Text Encoder
         if loss_kwargs.with_semantic_map:
@@ -137,16 +137,22 @@ class PredictionTrainer(LightningModule):
 
         # -> Binimg
         # -> Time-Pose-valid
+        n_classes_binimg = self.net.heads.map_out["binimg"][-1].out_channels
         if self.with_binimg:
+            if n_classes_binimg == 2:
+                dict_metrics.update(
+                    {
+                        "metric_iou_Time_Pose": {
+                            f"T{time}_P{pos}": IoUMetric() for (time, pos) in self.bev_T_P
+                        }
+                    }
+                )
             dict_metrics.update(
                 {
-                    "metric_iou_Time_Pose": {
-                        f"T{time}_P{pos}": IoUMetric() for (time, pos) in self.bev_T_P
-                    }
+                    "metric_iou_Time_Avg": IntersectionOverUnion(
+                        n_classes=n_classes_binimg,
+                    )
                 }
-            )
-            dict_metrics.update(
-                {"metric_iou_Time_Avg": IntersectionOverUnion(n_classes=2)}
             )
             
             # Tracking metrics during the learning
@@ -652,7 +658,7 @@ class PredictionTrainer(LightningModule):
             l_targets = batch[target_key]
 
             for k, l in l_bev_losses.items():
-                loss = l(l_preds, l_targets, l_mask) # All tensor b, s, 1, h, w
+                loss = l(l_preds, l_targets, l_mask)
                 name = f"bev/{l_key}/{k}"
                 losses.update({name: loss})
                 total_loss = update_total_loss(total_loss, loss, name)
@@ -704,7 +710,7 @@ class PredictionTrainer(LightningModule):
             target_binimg = batch["binimg"]
             valid_binimg = batch["valid_binimg"]
             
-            # Time-Pose-valid
+            # Time-Pose-valid. Only for vehicle class!!!
             if hasattr(self, f"metric_iou_Time_Pose_{mode}"):
                 metric_dict = getattr(self, "_".join(["metric_iou_Time_Pose", mode]))
                 for index, (time, pose) in enumerate(self.bev_T_P):
@@ -715,6 +721,8 @@ class PredictionTrainer(LightningModule):
                         target_binimg[:, index],
                         valid_binimg[:, index],
                     )
+            
+            # Uses all classes for computation
             if hasattr(self, f"metric_iou_Time_Avg_{mode}"):
                 metric = getattr(self, "_".join(["metric_iou_Time_Avg", mode]))
                 cls_pred_binimg = torch.argmax(
