@@ -167,3 +167,90 @@ class CELoss(nn.Module):
             loss = loss[:, :, :k]
 
         return torch.mean(loss)
+
+class FocalLoss(nn.Module):
+    def __init__(
+        self,
+        class_weights=[0.1, 0.4, 0.8],
+        gamma=2.0,
+        ignore_index=255,
+        future_discount=0.95,
+        reduction="mean",
+    ):
+        """
+        Focal Loss for BEV forecasting with temporal discounting.
+
+        Args:
+            class_weights (list): Static class weights. E.g., [0.1, 0.4, 0.8]
+            gamma (float): Focusing parameter for hard examples.
+            ignore_index (int): Index to ignore (pixels outside the map).
+            future_discount (float): Discount factor in [0, 1] to penalize future frames less.
+            reduction (str): 'mean', 'sum' or 'none'.
+        """
+        super().__init__()
+        self.gamma = gamma
+        self.ignore_index = ignore_index
+        self.future_discount = future_discount
+        self.reduction = reduction
+        
+        if isinstance(class_weights, list):
+            self.class_weights = torch.tensor(class_weights, dtype=torch.float32)
+        elif isinstance(class_weights, torch.Tensor):
+            self.class_weights = class_weights.float()
+        else:
+            self.class_weights = None
+
+    def forward(self, inputs, targets, mask=None):
+        """
+        Args:
+            inputs: Predictions [B, T, C, H, W]
+            targets: Ground truth [B, T, 1, H, W] (values from 0 to C-1)
+        """
+        if self.class_weights is not None and self.class_weights.device != inputs.device:
+            self.class_weights = self.class_weights.to(inputs.device)
+
+        inputs = inputs.transpose(1, 2)  # [B, C, T, H, W]
+        targets = targets.squeeze(2).long()  # [B, T, H, W]
+
+        ce_loss_unweighted = F.cross_entropy(
+            inputs, targets, reduction='none', ignore_index=self.ignore_index
+        )
+        
+        pt = torch.exp(-ce_loss_unweighted)
+
+        if self.class_weights is not None:
+            ce_loss_weighted = F.cross_entropy(
+                inputs,
+                targets,
+                weight=self.class_weights,
+                reduction="none",
+                ignore_index=self.ignore_index,
+            )
+        else:
+            ce_loss_weighted = ce_loss_unweighted
+
+        # Output: [B, T, H, W]
+        focal_loss = ((1 - pt) ** self.gamma) * ce_loss_weighted
+
+        T = focal_loss.shape[1]
+        discounts = torch.pow(
+            self.future_discount, torch.arange(T, device=inputs.device)
+        )
+        discounts = discounts.view(1, T, 1, 1)
+
+        # Apply discount to the loss
+        focal_loss = focal_loss * discounts
+
+        # 6. Final reduction ignoring invalid indices
+        if self.reduction == "mean":
+            valid_mask = targets != self.ignore_index
+            return (
+                focal_loss[valid_mask].mean()
+                if valid_mask.any()
+                else torch.tensor(0.0, device=inputs.device)
+            )
+        elif self.reduction == "sum":
+            valid_mask = targets != self.ignore_index
+            return focal_loss[valid_mask].sum()
+        else:
+            return focal_loss

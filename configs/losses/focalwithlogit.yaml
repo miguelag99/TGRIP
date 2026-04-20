@@ -1,0 +1,7 @@
+cls: FocalLoss
+kwargs: 
+  class_weights : [0.33, 0.66] # Background + filters_cat in the dataset config (sum = 1.0).
+  gamma : 2.0
+  ignore_index : 255
+  future_discount : 0.95
+  reduction: "mean"

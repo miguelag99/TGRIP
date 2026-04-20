@@ -17,7 +17,14 @@ from einops import rearrange
 
 from tgrip.data.dataset.nuscenes_common import MAP_DYNAMIC_TAG, VISIBILITY_TAG
 from tgrip.data.dataset.semantic_data import CLASS_CONDITIONS, MAP_LAYERS
-from tgrip.loss import BCELoss, CELoss, SpatialLoss, CosineSimilarityLoss, Weighting
+from tgrip.loss import (
+    BCELoss,
+    CELoss,
+    FocalLoss,
+    SpatialLoss,
+    CosineSimilarityLoss,
+    Weighting,
+)
 from tgrip.metric import (
     IoUMetric,
     MeanMetric,
@@ -245,6 +252,8 @@ class PredictionTrainer(LightningModule):
                     )
             elif cls_loss_segm == "CELoss":
                 dict_losses["bev"]["binimg"]["CELoss"] = loss_segm()
+            elif cls_loss_segm == "FocalLoss":
+                dict_losses["bev"]["binimg"]["FocalLoss"] = loss_segm()
             else:
                 raise NotImplementedError(f"{cls_loss_segm} not implemented.")
 
