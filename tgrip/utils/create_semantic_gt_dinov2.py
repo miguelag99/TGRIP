@@ -37,7 +37,7 @@ def async_save(tensors, filename):
 @torch.no_grad()
 def generate_semantic_embeds(cfg: DictConfig) -> None:
     """This functions generates the corresponding semantic embed for each object
-    in each frame using CLIP visual encoder.
+    in each frame using Dino visual encoder.
 
     Args:
         cfg (DictConfig): Hydra config object.
