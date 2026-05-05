@@ -100,10 +100,20 @@ class GeomScaler:
     def pts_from_spatial_to_scale(self, points):
         """x/50: [-50,50] -> [-1,1]"""
         return points / (-self.bx[:2] + self.dx[:2] / 2.0)
+    
+    def pts_from_scaled_to_img(self, points):
+        """(x+1)*100: [-1,1] -> [0,200]"""
+        out = (points + 1) * self.nx[:2] / 2.0
+        return out
 
     def pts_from_spatial_to_img(self, points):
         """x+50)/0.5: [-50,50] -> [0,200]"""
         out = (points - self.bx[:2] + self.dx[:2] / 2.0) / self.dx[:2]
+        return out
+    
+    def pts_from_img_to_spatial(self, points):
+        """x*0.5-50: [0,200] -> [-50,50]"""
+        out = points * self.dx[:2] + self.bx[:2] - self.dx[:2] / 2.0
         return out
 
 

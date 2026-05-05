@@ -20,6 +20,7 @@ dependencies = [
     "lightning>2.0.0",
     "lyft-dataset-sdk>=0.0.8",
     "matplotlib<3.8.0",
+    "motmetrics>=1.4.0",
     "multiscaledeformableattention>=1.0",
     "numpy==1.26.4",
     "nuscenes-devkit>=1.1.0",
