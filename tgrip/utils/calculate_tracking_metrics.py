@@ -231,10 +231,10 @@ def run_tracking_metrics(cfg: DictConfig) -> None:
         
     summary = mm.metrics.create().compute_many(
         accumulators,
-        metrics=['num_frames', 'mota', 'motp'],
+        metrics=['num_frames', 'mota', 'motp', 'num_switches', 'num_fragmentations'],
         generate_overall=True
     )
-    print(summary)
+    log.info(f"Tracking Metrics Summary for {cfg.ckpt.path}:\n{summary}")
     
 @hydra.main(version_base="1.3", config_path="../../configs", config_name="val.yaml")
 def main(cfg: DictConfig) -> Optional[float]:
