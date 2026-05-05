@@ -171,7 +171,7 @@ def run_tracking_metrics(cfg: DictConfig) -> None:
     cfg.data.num_workers = 1
     cfg.data.batch_size = 1
     cfg.data.normalize_img = True
-    cfg.data.version = 'mini'
+    cfg.data.version = 'trainval'
     cfg.data.img_params.min_visibility = 1
     cfg.data.keep_input_detection = True
     cfg.data.coeffs.bev_aug.trans_rot = [0., 0., 0., 0., 0., 0.]
