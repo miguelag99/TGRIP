@@ -246,7 +246,14 @@ def make_instance_id_temporally_consecutive(pred_inst, preds, backward_flow, ign
     return consistent_instance_seg
 
 
-def predict_instance_segmentation(output, compute_matched_centers=False,  vehicles_id=1, spatial_extent=[50, 50]):
+def predict_instance_segmentation(
+    output, 
+    compute_matched_centers=False, 
+    vehicles_id=1, 
+    spatial_extent=[50, 50], 
+    nms_kernel_size=None, 
+    conf_threshold=0.1
+):
     """_summary_
 
     Args:
@@ -266,10 +273,12 @@ def predict_instance_segmentation(output, compute_matched_centers=False,  vehicl
     pred_inst = []
     for b in range(batch_size):
         pred_inst_batch = get_instance_segmentation_and_centers(
-            torch.softmax(output['segmentation'], dim=2)[b, 0:1, vehicles_id].detach(),
-            output['instance_flow'][b, 1:2].detach(),
+            torch.softmax(output["segmentation"], dim=2)[b, 0:1, vehicles_id].detach()
+            + output["centerness"].float()[b, 0:1, 0].detach(),
+            output["instance_flow"][b, 1:2].detach(),
             foreground_masks[b, 1:2].detach(),
-            nms_kernel_size=round(350/spatial_extent[0]),
+            nms_kernel_size=nms_kernel_size if nms_kernel_size is not None else round(350 / spatial_extent[0]),
+            conf_threshold=conf_threshold
         )
         pred_inst.append(pred_inst_batch)
     pred_inst = torch.stack(pred_inst).squeeze(2)
@@ -315,7 +324,13 @@ def predict_instance_segmentation(output, compute_matched_centers=False,  vehicl
     return consistent_instance_seg.long()
 
 
-def generate_gt_instance_segmentation(output, compute_matched_centers=False,  vehicles_id=1, spatial_extent=[50, 50]):
+def generate_gt_instance_segmentation(
+    output,
+    compute_matched_centers=False,
+    vehicles_id=1,
+    spatial_extent=[50, 50],
+    nms_kernel_size=None,
+):
     preds = output['segmentation']
     foreground_masks = preds.squeeze(2) == vehicles_id
     output['segmentation'] = output['segmentation'].float() + output['centerness'].float()
@@ -327,7 +342,7 @@ def generate_gt_instance_segmentation(output, compute_matched_centers=False,  ve
             output['segmentation'][b, 0:1, 0].detach(),
             output['instance_flow'][b, 1:2].detach(),
             foreground_masks[b, 1:2].detach(),
-            nms_kernel_size=round(350/spatial_extent[0]),
+            nms_kernel_size=nms_kernel_size if nms_kernel_size is not None else round(350 / spatial_extent[0]),
         )
         pred_inst.append(pred_inst_batch)
     pred_inst = torch.stack(pred_inst).squeeze(2)
