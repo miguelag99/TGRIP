@@ -116,7 +116,11 @@ def calculate_tracking_metrics(
     obj_tokens = ground_truth["obj_tokens"][batch_id]
 
     for t in range(len(centers_aug) - 2):
+        
+        if centers_aug[t + 2].shape[0] == 0:
+            continue
         centers_aug[t + 2] = -centers_aug[t + 2].fliplr()
+
         for instance_id, ann_token in enumerate(obj_tokens[t + 2]):
             instance_token = nusc.get("sample_annotation", ann_token)["instance_token"]
             if instance_token not in gt_centers:
@@ -231,8 +235,19 @@ def run_tracking_metrics(cfg: DictConfig) -> None:
         
     summary = mm.metrics.create().compute_many(
         accumulators,
-        metrics=['num_frames', 'mota', 'motp', 'num_switches', 'num_fragmentations'],
-        generate_overall=True
+        metrics=[
+            "num_frames",
+            "mota",
+            "motp",
+            "num_switches",
+            "num_fragmentations",
+            "precision",
+            "recall",
+            "mostly_tracked",
+            "mostly_lost",
+            "partially_tracked",
+        ],
+        generate_overall=True,
     )
     log.info(f"Tracking Metrics Summary for {cfg.ckpt.path}:\n{summary}")
     
