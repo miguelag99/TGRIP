@@ -55,6 +55,7 @@ class PredictionTrainer(LightningModule):
         loss_kwargs={},
         metric_kwargs={},
         temporal_kwargs={},
+        postproc_kwargs={},
         grid={"xbound": [], "ybound": [], "zbound": []},
         text_encoder: nn.Module = None,
         name="",
@@ -63,6 +64,11 @@ class PredictionTrainer(LightningModule):
         self.save_hyperparameters(logger=False, ignore=["net", "text_encoder"])
 
         self.net = net
+
+        # Post-processing parameters (for instance segmentation)
+        self._conf_threshold = postproc_kwargs.get("conf_threshold", 0.1)
+        self._nms_kernel_size = postproc_kwargs.get("nms_kernel_size", None)
+        # self._seg_threshold = postproc_kwargs.get("seg_threshold", 0.3)
 
         # Temporal
         self._init_temporal(temporal_kwargs)
@@ -809,8 +815,11 @@ class PredictionTrainer(LightningModule):
                     {
                         "instance_flow": preds["bev"]["flow"],
                         "segmentation": preds["bev"]["binimg"],
+                        "centerness": preds["bev"]["centerness"] if self.with_centr_offs else None,
                     },
-                    spatial_extent = (self.grid["xbound"][1], self.grid["ybound"][1]),
+                    spatial_extent=(self.grid["xbound"][1], self.grid["ybound"][1]),
+                    conf_threshold=self._conf_threshold,
+                    nms_kernel_size=self._nms_kernel_size,
                 )
 
                 metric.update(

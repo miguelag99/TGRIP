@@ -1,9 +1,9 @@
 # @package _global_
 
 defaults:
-  - _self_
   - data: nuscenes_pred.yaml
   - model: TGRIPPredictor.yaml
+  - _self_
   - callbacks: default_pl.yaml
   - plugins: null
   - logger: default_pl.yaml
@@ -26,7 +26,7 @@ profile: False
 # simply provide checkpoint path to resume training
 ckpt:
   resume: False
-  path: 'checkpoints/BEVPredFormer_scale05.ckpt'
+  path: 'checkpoints/BEVPredFormer_scale05_short.ckpt'
   model:
     freeze: null
     load: ['net.backbone', 'net.neck', 'net.view_transform', 'net.decoder', 'net.coord_selector',
@@ -41,7 +41,16 @@ flags:
   debug: false
   val_sparse: false
 
+data:
+  grid:
+    xbound: [-15.0, 15.0, 0.15]
+    ybound: [-15.0, 15.0, 0.15]
+
 model:
+  net:
+    projector:
+      spatial_bounds: [-14.925, 14.925, -14.925, 14.925, -3.375, 5.375]
+  
   text_encoder:
     _target_: tgrip.models.text_encoder.CLIPEncoder
     model_name: "openai/clip-vit-base-patch16"
