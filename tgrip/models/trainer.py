@@ -68,8 +68,7 @@ class PredictionTrainer(LightningModule):
         # Post-processing parameters (for instance segmentation)
         self._conf_threshold = postproc_kwargs.get("conf_threshold", 0.1)
         self._nms_kernel_size = postproc_kwargs.get("nms_kernel_size", None)
-        # self._seg_threshold = postproc_kwargs.get("seg_threshold", 0.3)
-
+        
         # Temporal
         self._init_temporal(temporal_kwargs)
 
@@ -80,10 +79,7 @@ class PredictionTrainer(LightningModule):
 
         # Metrics
         dict_metrics = self._init_metric(metric_kwargs)
-        # self.metric_test = IntersectionOverUnion(
-        #     n_classes = 2,
-        # )
-
+        
         # Text Encoder
         if loss_kwargs.with_semantic_map:
             assert (
