@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -59,6 +60,7 @@ def val(cfg: DictConfig) -> Tuple[dict, dict]:
         logger=logger,
         plugins=plugins,
         profiler=profiler,
+        precision="bf16-mixed",
         accumulate_grad_batches=16//cfg.data.batch_size,
     )
 
@@ -80,7 +82,7 @@ def val(cfg: DictConfig) -> Tuple[dict, dict]:
     if cfg.get("val"):
         log.info("Starting validation!")
         val_metrics = trainer.validate(model=model, datamodule=datamodule)
-
+        print(f"SWEEP_METRICS:{json.dumps(val_metrics[0])}", flush=True)
 
     return val_metrics, object_dict
 

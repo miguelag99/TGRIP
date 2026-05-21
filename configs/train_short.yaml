@@ -97,4 +97,4 @@ model:
 
   postproc_kwargs:
     conf_threshold: 0.1
-    nms_kernel_size: 5   # null → uses default: round(350 / spatial_extent[0])
+    nms_kernel_size: 13   # null → uses default: round(350 / spatial_extent[0])
