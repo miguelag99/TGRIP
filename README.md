@@ -83,6 +83,16 @@ uv run tgrip/val.py
 
 Remember to specify the model checkpoint to load in the [val.yaml](./configs/val.yaml) configuration file.
 
+## 3. Model checkpoints
+
+The model checkpoints for the different versions of TGRIP are available in the [TGRIP HuggingFace repository](https://huggingface.co/miguelag99/TGRIP).
+
+| Semantic Supervision | IoU - Long | VPQ - Long | IoU - Short | VPQ - Long | Ckpt - Long | Ckpt - Short |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| Baseline (no semantic) | 40.9 | 33.3 | 63.9 | 54.9 | - | - |
+| TGRIP CLIP-Base PS 16 | 41.3 | 34.3 | 64.5 | 56.1 | [Link](https://huggingface.co/miguelag99/TGRIP/resolve/main/TGRIP_visual_CLIPB16.ckpt) | [Link](https://huggingface.co/miguelag99/TGRIP/resolve/main/TGRIP_visual_CLIPB16_short.ckpt) |
+| TGRIP CLIP-Large PS 14 | 41.3 | 34.3 | 64.5 | 56.3 | [Link](https://huggingface.co/miguelag99/TGRIP/resolve/main/TGRIP_visual_CLIPL14.ckpt) | [Link](https://huggingface.co/miguelag99/TGRIP/resolve/main/TGRIP_visual_CLIPL14_short.ckpt) |
+
 ## Contact
 
 [![Static Badge](https://img.shields.io/badge/ORCID-0009--0008--5627--5325-green?style=flat&logo=orcid)](https://orcid.org/0009-0008-5627-5325)
