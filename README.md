@@ -1,8 +1,32 @@
-# TGRIP: Text Guided Representation for BEV Instance Prediction
+# TGRIP: A Text-Guided Approach to Vehicle Instance Prediction in Autonomous Driving
 
-## Official implementation of TGRIP: Text Guided Representation for BEV Instance Prediction
+<p align="center">
+    <a href="https://www.miguelantunes.eu/">Miguel Antunes-García</a><sup>1</sup>,
+    <a href="https://www.santimontiel.eu/">Santiago Montiel-Marín</a><sup>1</sup>,
+    <a href="https://www.linkedin.com/in/fabio-sanchez-garcia/">Fabio Sánchez-García</a><sup>1</sup>,
+</p>
+<p align="center">
+    <a href="https://rodrigogutierrezm.github.io/">Rodrigo Gutiérrez-Moreno</a><sup>1</sup>,
+    <a href="https://scholar.google.es/citations?hl=es&user=IktmiSAAAAAJ">Rafael Barea</a><sup>1</sup>, and
+    <a href="http://www.robesafe.uah.es/personal/bergasa/">Luis M. Bergasa</a><sup>1</sup>
+</p>
+<p align="center" style="font-size: 0.9em; font-style: italic;">
+  <sup>1</sup> Universidad de Alcalá
+</p>
 
-[![Python](https://img.shields.io/badge/Python-3.12.3-3776AB.svg?style=for-the-badge&logo=python)](https://python.org) [![PyTorch](https://img.shields.io/badge/PyTorch-2.8.0-EE4C2C.svg?style=for-the-badge&logo=pytorch)](https://pytorch.org) [![Lightning](https://img.shields.io/badge/Lightning-2.5.4-purple?style=for-the-badge&logo=lightning)](https://lightning.ai/docs/pytorch/stable/) [![Wandb](https://img.shields.io/badge/Wandb-gray?style=for-the-badge&logo=weightsandbiases)](https://wandb.ai/) [![Docker](https://img.shields.io/badge/Docker-gray?style=for-the-badge&logo=docker&logoColor=white&labelColor=%23007FFF)](https://www.docker.com) [![UV](https://img.shields.io/badge/UV-gray?style=for-the-badge&logo=uv&logoColor=white&labelColor=DE5FE9)](https://docs.astral.sh/uv/)
+<div align=center>
+    <img src="https://img.shields.io/badge/Python-3.12.3-3776AB.svg?style=for-the-badge&logo=python" alt="python">
+    <img src=https://img.shields.io/badge/PyTorch-2.8.0-EE4C2C.svg?style=for-the-badge&logo=pytorch>
+    <img src=https://img.shields.io/badge/Lightning-2.5.4-purple?style=for-the-badge&logo=lightning>
+</div>
+<div align=center>
+    <img src="https://img.shields.io/badge/UV-gray?style=for-the-badge&logo=uv&logoColor=white&labelColor=DE5FE9" alt="UV">
+    <img src="https://img.shields.io/badge/Docker-gray?style=for-the-badge&logo=docker&logoColor=white&labelColor=%23007FFF" alt="Docker">
+    <img src="https://img.shields.io/badge/Wandb-gray?style=for-the-badge&logo=weightsandbiases" alt="wandb">
+    <a href="https://arxiv.org/abs/2607.04812">
+      <img src="https://img.shields.io/badge/arxiv-black?style=for-the-badge&logo=arxiv" alt="arxiv">
+    </a>
+</div>
 
 ## 1. NuScenes Dataset
 
@@ -92,6 +116,21 @@ The model checkpoints for the different versions of TGRIP are available in the [
 | Baseline (no semantic) | 40.9 | 33.3 | 63.9 | 54.9 | - | - |
 | TGRIP CLIP-Base PS 16 | 41.3 | 34.3 | 64.5 | 56.1 | [Link](https://huggingface.co/miguelag99/TGRIP/resolve/main/TGRIP_visual_CLIPB16.ckpt) | [Link](https://huggingface.co/miguelag99/TGRIP/resolve/main/TGRIP_visual_CLIPB16_short.ckpt) |
 | TGRIP CLIP-Large PS 14 | 41.3 | 34.3 | 64.5 | 56.3 | [Link](https://huggingface.co/miguelag99/TGRIP/resolve/main/TGRIP_visual_CLIPL14.ckpt) | [Link](https://huggingface.co/miguelag99/TGRIP/resolve/main/TGRIP_visual_CLIPL14_short.ckpt) |
+
+## Citation
+Please, consider citing thiw work with:
+
+```bibtex
+@misc{antunesgarcía2026tgriptextguidedapproachvehicle,
+      title={TGRIP: A Text-Guided Approach to Vehicle Instance Prediction in Autonomous Driving}, 
+      author={Miguel Antunes-García and Santiago Montiel-Marín and Fabio Sánchez-García and Rodrigo Gutiérrez-Moreno and Rafael Barea and Luis M. Bergasa},
+      year={2026},
+      eprint={2607.04812},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2607.04812}, 
+}
+```
 
 ## Contact
 
