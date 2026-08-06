@@ -33,7 +33,7 @@ ckpt:
             'net.temporal', 'net.query_gen', 'net.heads']
 
 # seed for random number generators in pytorch, numpy and python.random
-seed: null
+seed: 115
 
 log_every_n_steps: 50 
 

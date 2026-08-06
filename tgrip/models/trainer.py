@@ -819,8 +819,8 @@ class PredictionTrainer(LightningModule):
                 )
 
                 metric.update(
-                    pred_instance_seg[:,1:],
-                    batch["instance"][:,1:].squeeze(2).long()
+                    (pred_instance_seg[:,1:] * valid_binimg[:,1:].squeeze(2)).long(),
+                    (batch["instance"][:,1:] * valid_binimg[:,1:]).squeeze(2).long()
                 )
                         
         if ("vis_semantic_map" in batch.keys()):
