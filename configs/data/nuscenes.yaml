@@ -78,3 +78,4 @@ mode_ref_cam_T: 'present'
 # Filters
 only_object_center_in: false
 filters_cat: ['vehicle']
+scene_conditions: []
