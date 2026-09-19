@@ -81,6 +81,7 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
         cfg.trainer,
         callbacks=callbacks,
         logger=logger,
+        precision="bf16-mixed",
         plugins=plugins,
         profiler=profiler,
         accumulate_grad_batches=16//cfg.data.batch_size,
