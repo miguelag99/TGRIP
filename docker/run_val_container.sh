@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=tgrip-training
+#SBATCH --job-name=tgrip-val
 #SBATCH --partition=H200
 #SBATCH --gres=gpu:h200:2
 #SBATCH --time=70:00:00
@@ -32,6 +32,6 @@ srun \
   bash -c '
     uv sync
     ulimit -n 65535
-    uv run tgrip/train.py
+    uv run tgrip/val.py
     echo "Training completed!"
   '
