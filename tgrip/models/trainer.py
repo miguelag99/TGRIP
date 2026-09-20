@@ -830,6 +830,13 @@ class PredictionTrainer(LightningModule):
                     preds["semantic"]["semantic_bev"].squeeze(1),
                     batch["vis_semantic_map"][:,1]  # Only present
                 )
+        elif ("semantic_map" in batch.keys()):
+            if hasattr(self, f"metric_cosine_similarity_{mode}"):
+                metric = getattr(self, f"metric_cosine_similarity_{mode}")
+                metric.update(
+                    preds["semantic"]["semantic_bev"].squeeze(1),
+                    batch["semantic_map"][:,1]  # Only present
+                )
 
     def _init_preds_dict_for_vis(self, preds):
         preds_dict = {"bev": {}, "masks": {}}
