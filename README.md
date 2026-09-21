@@ -49,7 +49,7 @@ NUSCENES_PATH = /path/to/nuscenes
 
 ## 2. Installation and Usage
 
-[![CHANGELOG](https://img.shields.io/badge/Changelog-v1.0.0-2ea44f?style=for-the-badge)](https://github.com/miguelag99/TGRIP/blob/main/CHANGELOG.md)
+[![CHANGELOG](https://img.shields.io/badge/Changelog-v1.1.0-2ea44f?style=for-the-badge)](https://github.com/miguelag99/TGRIP/blob/main/CHANGELOG.md)
 
 The whole code is implemented inside a Docker image to ensure reproducibility and ease of use. The image is based on the official PyTorch image with CUDA support and includes all the necessary dependencies to run the code.
 The project specific dependencies are installed using [uv](https://docs.astral.sh/uv/) in a virtual environment within the shared folder between the host and the container.
@@ -107,18 +107,36 @@ uv run tgrip/val.py
 
 Remember to specify the model checkpoint to load in the [val.yaml](./configs/val.yaml) configuration file.
 
+For prediction evaluation, it is not necessary to generate the BEV semantic embeddings for the whole dataset, as they are only used for training, just configure ```keep_input_semantic_maps: False``` in the [nuscenes_pred.yaml](./configs/data/nuscenes_pred.yaml) configuration file.
+
+However, if you want to evaluate the model cosine similarity with the BEV semantic embeddings, you can generate them using the following command (only clip models and siglip have been tested):
+
+```bash
+uv run tgrip/utils/create_semantic_gt_<model>.py
+```
+
+You can change the model used inside each script. For example, in create_semantic_gt_clip.py, you can change between CLIP-L/14, CLIP-B/16...
+
 ## 3. Model checkpoints
 
-The model checkpoints for the different versions of TGRIP are available in the [TGRIP HuggingFace repository](https://huggingface.co/miguelag99/TGRIP).
+The model checkpoints for the different versions of TGRIP are available in the [TGRIP GitHub repository](https://github.com/miguelag99/TGRIP/releases/tag/v1.1.0).
 
-| Semantic Supervision | IoU - Long | VPQ - Long | IoU - Short | VPQ - Long | Ckpt - Long | Ckpt - Short |
-| :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| Baseline (no semantic) | 40.9 | 33.3 | 63.9 | 54.9 | - | - |
-| TGRIP CLIP-Base PS 16 | 41.3 | 34.3 | 64.5 | 56.1 | [Link](https://huggingface.co/miguelag99/TGRIP/resolve/main/TGRIP_visual_CLIPB16.ckpt) | [Link](https://huggingface.co/miguelag99/TGRIP/resolve/main/TGRIP_visual_CLIPB16_short.ckpt) |
-| TGRIP CLIP-Large PS 14 | 41.3 | 34.3 | 64.5 | 56.3 | [Link](https://huggingface.co/miguelag99/TGRIP/resolve/main/TGRIP_visual_CLIPL14.ckpt) | [Link](https://huggingface.co/miguelag99/TGRIP/resolve/main/TGRIP_visual_CLIPL14_short.ckpt) |
+| Checkpoint Name | Download Link |
+|-----------------|---------------|
+| TGRIP_visual_CLIPL14.ckpt | [Download](https://github.com/miguelag99/TGRIP/releases/download/v1.1.0/TGRIP_visual_CLIPL14.ckpt) |
+| TGRIP_visual_CLIPL14_short.ckpt | [Download](https://github.com/miguelag99/TGRIP/releases/download/v1.1.0/TGRIP_visual_CLIPL14_short.ckpt) |
+| TGRIP_visual_CLIPB16.ckpt | [Download](https://github.com/miguelag99/TGRIP/releases/download/v1.1.0/TGRIP_visual_CLIPB16.ckpt) |
+
+The configuration files default to CLIP-L/14. To use the CLIP-B/16 checkpoint, change:
+
+| Setting | File | Value |
+|---------|------|-------|
+| `text_dim` | [semantic_conv.yaml](./configs/model/net/semantic_head/semantic_conv.yaml) | `512` |
+| `semanticroot` | [nuscenes_pred.yaml](./configs/data/nuscenes_pred.yaml) | `${paths.data_dir}/visual_semantic_embeds_clipViTB16` |
+| `model.text_encoder.model_name` | task config, e.g. [val.yaml](./configs/val.yaml) | `openai/clip-vit-base-patch16` |
 
 ## Citation
-Please, consider citing thiw work with:
+Please, consider citing this work with:
 
 ```bibtex
 @misc{antunesgarcía2026tgriptextguidedapproachvehicle,

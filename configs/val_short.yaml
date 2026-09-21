@@ -26,7 +26,7 @@ profile: False
 
 # simply provide checkpoint path to evaluate
 ckpt:
-  path: "checkpoints/TGRIP_visual_semantic_short.ckpt"
+  path: "checkpoints/TGRIP_visual_CLIPL14_short.ckpt"
   model:
     freeze: []
     load: "all"
@@ -52,8 +52,8 @@ model:
 
   text_encoder:
     _target_: tgrip.models.text_encoder.CLIPEncoder
-    model_name: "openai/clip-vit-base-patch16"
-  
+    model_name: "openai/clip-vit-large-patch14"  
+
   loss_kwargs:
     with_binimg: ${data.keep_input_binimg}
     pos_weight: 2.13

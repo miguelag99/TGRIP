@@ -60,7 +60,6 @@ def val(cfg: DictConfig) -> Tuple[dict, dict]:
         logger=logger,
         plugins=plugins,
         profiler=profiler,
-        precision="bf16-mixed",
         accumulate_grad_batches=16//cfg.data.batch_size,
     )
 
