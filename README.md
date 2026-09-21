@@ -92,11 +92,6 @@ The different configuration parameters can be tuned in the different yaml files 
 - [trainer/ddp_pl.yaml](./configs/trainer/ddp_pl.yaml): used to specify the trainer configuration (e.g., **number of epochs, gpus, strategy** for multi-GPU training, etc.).
 - [model/TGRIPPredictor.yaml](./configs/model/TGRIPPredictor.yaml): used to specify the **main model configuration** (e.g., model architecture, hyperparameters, etc.).
 
-It is recommended to use some of the pretrained models available in the releases section of this repository to fine-tune the model for specific tasks. The available pretrained models are:
-
-- TGRIP_visual_semantic.ckpt: full prediction model trained with visual semantic supervision from CLIP B/16 for the full BEV range of 50m from the ego-vehicle.
-- TGRIP_visual_semantic_short.ckpt: full prediction model trained with visual semantic supervision from CLIP B/16 for short perception range of 30m.
-
 ### 2.2 Evaluation
 
 To evaluate any version of TGRIP, you can use the following command inside the Docker container:
