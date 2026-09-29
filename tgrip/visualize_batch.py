@@ -31,6 +31,8 @@ def visualise(cfg: DictConfig) -> None:
     cfg.data.num_workers = 1
     cfg.data.batch_size = 1
     cfg.data.normalize_img = False
+    # Semantic maps are not plotted and need text embeddings only available in the trainer.
+    cfg.data.keep_input_semantic_maps = False
     # cfg.data.version = 'mini'
 
     log.info(f"Instantiating datamodule <{cfg.data._target_}>")
@@ -55,7 +57,8 @@ def visualise(cfg: DictConfig) -> None:
         img_names = cfg.data.img_params.cams
         
         imgs = x['imgs'][-1]  # Present images
-        bev_segments = x['binimg'][1:]  # BEV segment
+        # BEV segment. Only objects used in training (valid_binimg, e.g. visibility >= min_visibility).
+        bev_segments = (x['binimg'] * x['valid_binimg'])[1:]
         
         bev_segments_upsampled = []
         for bev_segment in bev_segments:
@@ -180,9 +183,9 @@ def generate_gt_instance_pred(
         bev_resolution.numpy(), bev_start_position.numpy(), bev_dimension.numpy()
     )
 
-    # Generate gt instance prediction
+    # Generate gt instance prediction, only with objects used in training.
     data = {
-        'segmentation': batch['binimg_aug'][1:].unsqueeze(0),
+        'segmentation': (batch['binimg_aug'] * batch['valid_binimg_aug'])[1:].unsqueeze(0),
         'instance_flow': batch['flow_map_aug'][1:].unsqueeze(0),
         'centerness': batch['centerness_aug'][1:].unsqueeze(0),
     }
