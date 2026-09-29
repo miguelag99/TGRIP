@@ -27,6 +27,7 @@ dependencies = [
     "opencv-python>=4.11.0.86",
     "peft>=0.17.1",
     "pre-commit>=4.3.0",
+    "pyarrow>=25.0.1",
     "pyfiglet>=1.0.4",
     "pyquaternion>=0.9.9",
     "pyrootutils>=1.0.4",

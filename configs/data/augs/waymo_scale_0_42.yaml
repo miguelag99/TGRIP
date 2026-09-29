@@ -1,0 +1,8 @@
+# Waymo 1920x886 (front cameras cropped at the top) -> 800x369 -> crop sky to ~352x800.
+# 352 keeps the native aspect ratio and is a multiple of 32 (backbone stride).
+scale: [0.412,0.421]
+zoom_lim: [0.95,1.05]
+final_dim: [352,800]
+rot_lim: [-2.5, 2.5]
+crop_up_pct: [0.93, 0.98]
+rand_flip: False

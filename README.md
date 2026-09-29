@@ -47,6 +47,57 @@ Configure the path to the NuScenes dataset in the [Makefile](./Makefile):
 NUSCENES_PATH = /path/to/nuscenes
 ```
 
+### 1.1 Waymo Open Dataset (optional)
+
+TGRIP can also be trained and evaluated on the [Waymo Open Dataset](https://waymo.com/open/) (Perception v2.0.1, parquet format). Only camera data is used.
+
+**Download.** Accept the Waymo license with your Google account, install the [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) and log in with `gcloud auth login --no-launch-browser`. Then download the camera-only components of the training and validation splits (~362 GB, of which ~361 GB are images):
+
+```bash
+cd /path/to/waymo
+for s in training validation; do
+  for c in camera_image camera_calibration vehicle_pose lidar_box camera_box camera_to_lidar_box_association; do
+    mkdir -p "$s/$c"
+    gcloud storage rsync -r "gs://waymo_open_dataset_v_2_0_1/$s/$c" "$s/$c"
+  done
+done
+```
+
+`lidar_box` contains the 3D box labels (not point clouds). The rsync is resumable. The `Is a directory` errors are harmless: they come from folder placeholder objects in the bucket.
+
+Configure the path to the Waymo dataset in the [Makefile](./Makefile):
+
+```bash
+WAYMO_PATH = /path/to/waymo
+```
+
+**Preprocessing.** Inside the container, convert the dataset into a nuScenes-like index. Frames are subsampled from 10 Hz to 2 Hz (same 0.5 s step as nuScenes keyframes) and the camera JPEGs are copied as-is to `processed/` (~72 GB). `--verify` checks the camera geometry against Waymo's independent 2D labels at short (±15 m) and long (±50 m) range:
+
+```bash
+uv run tgrip/utils/preprocess_waymo.py --root ~/Datasets/waymo --split validation --workers 8
+uv run tgrip/utils/preprocess_waymo.py --root ~/Datasets/waymo --split validation --verify
+uv run tgrip/utils/preprocess_waymo.py --root ~/Datasets/waymo --split training --workers 8
+uv run tgrip/utils/preprocess_waymo.py --root ~/Datasets/waymo --split training --verify
+```
+
+This gives 798 training / 202 validation segments (6,858 validation samples with the default temporal configuration).
+
+**Usage.** Select the Waymo data configuration, [waymo_pred.yaml](./configs/data/waymo_pred.yaml), in any task:
+
+```bash
+uv run tgrip/train.py data=waymo_pred
+uv run tgrip/val.py data=waymo_pred data.keep_input_semantic_maps=false
+```
+
+BEV semantic embeddings are not yet available for Waymo, so set `keep_input_semantic_maps: False`. For long range evaluation, the optimized post-processing kernel is `model.postproc_kwargs.nms_kernel_size=5`.
+
+**Differences with nuScenes:**
+
+- 5 cameras (front, front-left, front-right, side-left, side-right); there is no rear camera. Front cameras (1920x1280) are cropped at the top (sky) to the size of the side cameras (1920x886) and all images are resized to 352x800 (native aspect ratio), see [waymo_scale_0_42.yaml](./configs/data/augs/waymo_scale_0_42.yaml).
+- Waymo has no visibility annotation. Objects are used for training and evaluation only if they lie inside the field of view of at least one camera and have at least one lidar point in their box. Occlusion is not otherwise taken into account.
+- There is a single vehicle class, mapped to `vehicle.car`. Mobility is derived from the box speed: `moving` above 0.5 m/s, otherwise `stopped`.
+- Perspective segmentation, HD maps and lidar inputs are not supported.
+
 ## 2. Installation and Usage
 
 [![CHANGELOG](https://img.shields.io/badge/Changelog-v1.1.0-2ea44f?style=for-the-badge)](https://github.com/miguelag99/TGRIP/blob/main/CHANGELOG.md)
@@ -60,6 +111,7 @@ Before building the Docker image, you can configure the following parameters of 
 - `TAG_NAME`: Tag of the generated Docker image.
 - `USER_NAME`: Name of the user inside the Docker container.
 - `NUSCENES_PATH`: Path to the NuScenes dataset (**MANDATORY**).
+- `WAYMO_PATH`: Path to the Waymo dataset (optional, see [1.1 Waymo Open Dataset](#11-waymo-open-dataset-optional)).
 
 Build the Docker image with the following command (requires make and Docker installed):
 

@@ -1,0 +1,95 @@
+defaults:
+  - _self_ 
+  - augs@img_params: waymo_scale_0_42.yaml
+
+_target_: tgrip.data.datamodule.NuScenesDatamodule
+
+# Waymo (preprocessed with tgrip/utils/preprocess_waymo.py)
+version: trainval
+dataroot: /home/${oc.env:USER}/Datasets/waymo/processed
+hdmaproot: null
+semanticroot: /home/${oc.env:USER}/Datasets/waymo/processed/visual_semantic_embeds_clipViTL14
+is_lyft: False
+is_waymo: True
+
+cls_tag: WaymoDataset
+
+# Grid
+grid:
+  xbound: [-50.0, 50.0, 0.5]
+  ybound: [-50.0, 50.0, 0.5]
+
+  # xbound: [-15.0, 15.0, 0.15]
+  # ybound: [-15.0, 15.0, 0.15]
+
+  zbound: [-10.0, 10.0, 20.0]
+  dbound: [4.0, 45.0, 1.0]
+
+# Images
+img_loader:
+  _target_: tgrip.utils.imgs.ImageLoader
+  mode: PIL
+
+img_params:
+  # Front cameras (1920x1280) are cropped at the top (sky) to the side cameras size (1920x886).
+  H: 886
+  W: 1920
+  cams:
+    - 'CAM_FRONT_LEFT'
+    - 'CAM_FRONT'
+    - 'CAM_FRONT_RIGHT'
+    - 'CAM_SIDE_LEFT'
+    - 'CAM_SIDE_RIGHT'
+  Ncams: 5
+  min_visibility: 2
+  update_intrinsics: True
+  downsample: ${model.net.backbone.downsample}
+
+# Coefficients
+coeffs:
+  bev_aug:
+    trans_rot: [30.,20.,0.,20.,0.,0.]
+
+# Dataloader
+batch_size: 2
+valid_batch_size: ${data.batch_size}
+num_workers: 2
+pin_memory: True
+prefetch_factor: 2
+train_drop_last: True
+train_shuffle: True
+
+# Inputs.
+normalize_img: True 
+keep_input_binimg: True
+keep_input_centr_offs: True
+keep_input_detection: True
+keep_input_hdmap: False
+hdmap_names: [
+  'drivable_area', 'road_divider',
+  'ped_crossing', 'stop_line', 'walkway'
+]
+keep_input_persp: False
+keep_input_sampling: False
+keep_input_offsets_map: False
+keep_input_flow_map: True
+keep_input_instance_bev: True
+keep_input_lidar: False
+keep_input_semantic_maps: True
+save_folder: ""
+visualise_mode: False
+
+# Multi-scale
+kernel_scales: [1]
+
+# Temporal
+cam_T_P: [[-2,0],[-1,0],[0,0]]
+bev_T_P: [[-1,0],[0,0],[1,0],[2,0],[3,0],[4,0]]
+# cam_T_P: [[0,0]]
+# bev_T_P: [[0,0]]
+mode_ref_cam_T: 'present'
+
+# Filters
+only_object_center_in: false
+filters_cat: ['vehicle']
+scene_conditions: []

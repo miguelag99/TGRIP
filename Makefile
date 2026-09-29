@@ -7,6 +7,7 @@ HF_TOKEN := $(shell echo $$HF_TOKEN)
 UID := $(shell id -u)
 GID := $(shell id -g)
 NUSCENES_PATH := /path/to/nuscenes/dataset
+WAYMO_PATH := /path/to/waymo/dataset
 DGX_GPU_ID = 0
 
 define run_docker
@@ -20,6 +21,7 @@ define run_docker
 		-u $(USER_NAME) \
 		-v ./:/home/$(USER_NAME)/workspace \
 		-v $(NUSCENES_PATH):/home/$(USER_NAME)/Datasets/nuscenes \
+		-v $(WAYMO_PATH):/home/$(USER_NAME)/Datasets/waymo \
 		-e WANDB_API_KEY=$(WANDB_API_KEY) \
 		-e HF_TOKEN=$(HF_TOKEN) \
 		'$(IMAGE_NAME)':$(TAG_NAME) \

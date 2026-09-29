@@ -15,7 +15,8 @@ from einops import rearrange
 from nuscenes.nuscenes import NuScenes
 from torch import Tensor
 
-from tgrip.data.dataset import TemporalNuScenesDataset
+from tgrip.data.dataset import TemporalNuScenesDataset, WaymoDataset
+from tgrip.data.dataset.waymo_temporal import WaymoDB
 
 try:
     from lyft_dataset_sdk.lyftdataset import LyftDataset
@@ -37,6 +38,8 @@ class NuScenesDatamodule(pl.LightningDataModule):
         # Images
         img_loader,
         img_params,
+        # Waymo instead of nuscenes
+        is_waymo=False,
         # Coefficients
         coeffs={},
         # Dataloader
@@ -90,6 +93,7 @@ class NuScenesDatamodule(pl.LightningDataModule):
         self.version = version
         self.dataroot = dataroot
         self.is_lyft = is_lyft
+        self.is_waymo = is_waymo
         # Paths
         self.hdmaproot = hdmaproot
         self.semanticroot = semanticroot
@@ -152,7 +156,9 @@ class NuScenesDatamodule(pl.LightningDataModule):
         self.visualise_mode = visualise_mode
 
     def setup(self, stage: Optional[str] = None):
-        if not self.is_lyft:
+        if self.is_waymo:
+            nusc = WaymoDB(dataroot=self.dataroot, img_height=self.img_params["H"])
+        elif not self.is_lyft:
             nusc = NuScenes(
                 version="v1.0-{}".format(self.version),
                 dataroot=self.dataroot,

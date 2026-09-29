@@ -311,7 +311,7 @@ class TemporalNuScenesDataset(NuScenesDataset):
         else:
             if self.is_train:
                 if self.random_cam_ref:
-                    camref = np.random.randint(6)
+                    camref = np.random.randint(len(cams))
                 else:
                     camref = CAMREF
             else:
