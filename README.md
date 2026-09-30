@@ -80,16 +80,24 @@ uv run tgrip/utils/preprocess_waymo.py --root ~/Datasets/waymo --split training 
 uv run tgrip/utils/preprocess_waymo.py --root ~/Datasets/waymo --split training --verify
 ```
 
-This gives 798 training / 202 validation segments (6,858 validation samples with the default temporal configuration).
+This gives 798 training / 202 validation segments, i.e. 27,092 training / 6,857 validation samples with the default temporal configuration.
+
+**BEV semantic embeddings.** Generate the CLIP-L/14 visual embeddings of each object (~3 h, 2.1 GB), saved to the `semanticroot` of [waymo_pred.yaml](./configs/data/waymo_pred.yaml):
+
+```bash
+uv run tgrip/utils/create_semantic_gt_clip.py data=waymo_pred +clip_model=openai/clip-vit-large-patch14
+```
+
+As in nuScenes, they are only needed for training or to evaluate the cosine similarity; otherwise set `keep_input_semantic_maps: False`.
 
 **Usage.** Select the Waymo data configuration, [waymo_pred.yaml](./configs/data/waymo_pred.yaml), in any task:
 
 ```bash
 uv run tgrip/train.py data=waymo_pred
-uv run tgrip/val.py data=waymo_pred data.keep_input_semantic_maps=false
+uv run tgrip/val.py data=waymo_pred
 ```
 
-BEV semantic embeddings are not yet available for Waymo, so set `keep_input_semantic_maps: False`. For long range evaluation, the optimized post-processing kernel is `model.postproc_kwargs.nms_kernel_size=5`.
+For long range evaluation, the optimized post-processing kernel is `model.postproc_kwargs.nms_kernel_size=5`.
 
 **Differences with nuScenes:**
 
@@ -162,7 +170,7 @@ However, if you want to evaluate the model cosine similarity with the BEV semant
 uv run tgrip/utils/create_semantic_gt_<model>.py
 ```
 
-You can change the model used inside each script. For example, in create_semantic_gt_clip.py, you can change between CLIP-L/14, CLIP-B/16...
+You can change the model used inside each script. In create_semantic_gt_clip.py, it is selected with `+clip_model` (default `openai/clip-vit-base-patch32`), e.g. `+clip_model=openai/clip-vit-large-patch14` for CLIP-L/14.
 
 ## 3. Model checkpoints
 

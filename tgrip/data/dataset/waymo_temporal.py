@@ -9,9 +9,11 @@ NuScenesDataset / TemporalNuScenesDataset, so that all the BEV label generation 
 import os
 import pickle
 import warnings
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
+from nuscenes.utils.data_classes import Box
+from nuscenes.utils.geometry_utils import BoxVisibility, box_in_image
 from PIL import Image
 from pyquaternion import Quaternion
 
@@ -42,7 +44,8 @@ def _quaternion(rot: np.ndarray) -> List[float]:
 class WaymoDB:
     """Minimal nuScenes-devkit-like API over preprocessed Waymo index files.
 
-    Supported: dataroot, version, category, get(table, token), get_boxes (empty).
+    Supported: dataroot, version, category, get(table, token), get_boxes (empty),
+    get_sample_data (cameras only).
     Tables: sample_annotation, sample_data, ego_pose, calibrated_sensor, attribute.
     Split samples are loaded on demand with load_split().
 
@@ -95,6 +98,9 @@ class WaymoDB:
                         "camera_intrinsic": intrinsic.tolist(),
                         "rotation": _quaternion(cam["rotation"]),
                         "translation": cam["translation"].tolist(),
+                        # Original (uncropped) image, used by get_sample_data.
+                        "raw_camera_intrinsic": cam["intrinsic"].tolist(),
+                        "raw_size": (cam["width"], cam["height"]),
                     }
                 sd_token = f"{token}_{cam_name}"
                 self._tables["sample_data"][sd_token] = {
@@ -138,6 +144,34 @@ class WaymoDB:
     def get_boxes(self, sample_data_token: str) -> list:
         # Only used for perspective segmentation, which is not supported on Waymo.
         return []
+
+    def get_sample_data(
+        self,
+        sample_data_token: str,
+        box_vis_level: BoxVisibility = BoxVisibility.ANY,
+        selected_anntokens: List[str] = None,
+    ) -> Tuple[str, List[Box], np.ndarray]:
+        """Same as NuScenes.get_sample_data for camera sample_data: image path, boxes in the camera
+        frame that are visible in the image, and intrinsics. Returns the original (uncropped) image
+        and its intrinsics. Used to crop objects for the CLIP semantic embeddings."""
+        sd = self._tables["sample_data"][sample_data_token]
+        cs = self._tables["calibrated_sensor"][sd["calibrated_sensor_token"]]
+        pose = self._tables["ego_pose"][sd["ego_pose_token"]]
+        intrinsic = np.array(cs["raw_camera_intrinsic"])
+
+        boxes = []
+        for token in selected_anntokens or []:
+            ann = self._tables["sample_annotation"][token]
+            box = Box(ann["translation"], ann["size"], Quaternion(ann["rotation"]), token=token)
+            # Global -> ego -> camera.
+            box.translate(-np.array(pose["translation"]))
+            box.rotate(Quaternion(pose["rotation"]).inverse)
+            box.translate(-np.array(cs["translation"]))
+            box.rotate(Quaternion(cs["rotation"]).inverse)
+            if box_in_image(box, intrinsic, cs["raw_size"], vis_level=box_vis_level):
+                boxes.append(box)
+
+        return os.path.join(self.dataroot, sd["filename"]), boxes, intrinsic
 
 
 class TopCropLoader:

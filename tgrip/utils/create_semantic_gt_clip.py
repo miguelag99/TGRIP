@@ -26,9 +26,6 @@ save_executor = ThreadPoolExecutor(max_workers=1)
 
 torch.set_printoptions(precision=2, sci_mode=False)
 
-CAM_NAMES = ['CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT',
-                'CAM_BACK_LEFT', 'CAM_BACK', 'CAM_BACK_RIGHT']
-
 def async_save(tensors, filename):
     """Background task to save file"""
     try:
@@ -76,9 +73,14 @@ def generate_semantic_embeds(cfg: DictConfig) -> None:
     datamodule: LightningDataModule = hydra.utils.instantiate(cfg.data)
     datamodule.setup()
     
-    # CLIP model
-    clip = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
-    clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+    # CLIP model, e.g. +clip_model=openai/clip-vit-large-patch14 for CLIP-L/14.
+    clip_model = cfg.get("clip_model", "openai/clip-vit-base-patch32")
+    log.info(f"CLIP model: {clip_model}")
+    clip = CLIPModel.from_pretrained(clip_model).to(device)
+    clip_processor = CLIPProcessor.from_pretrained(clip_model)
+
+    # Cameras of the dataset (nuScenes: 6, Waymo: 5).
+    cam_names = list(cfg.data.img_params.cams)
             
     # Generate train samples
     dataset = datamodule.train_dataloader()
@@ -92,7 +94,7 @@ def generate_semantic_embeds(cfg: DictConfig) -> None:
         assert batch["imgs"].shape[0] == 1  # batch size 1
         scene_token = batch["sample_tokens"][0][0] # Only the present frame
                                
-        for i, cam_name in enumerate(CAM_NAMES):
+        for i, cam_name in enumerate(cam_names):
             
             img_path, gt_obj, intrinsic = dataset.dataset.nusc.get_sample_data(
                 batch['sample_tokens'][0][0]['data'][cam_name],
@@ -166,7 +168,7 @@ def generate_semantic_embeds(cfg: DictConfig) -> None:
         assert batch["imgs"].shape[0] == 1  # batch size 1
         scene_token = batch["sample_tokens"][0][0] # Only the present frame
                                
-        for i, cam_name in enumerate(CAM_NAMES):
+        for i, cam_name in enumerate(cam_names):
             
             img_path, gt_obj, intrinsic = dataset.dataset.nusc.get_sample_data(
                 batch['sample_tokens'][0][0]['data'][cam_name],
