@@ -202,12 +202,13 @@ class PredictionTrainer(LightningModule):
         #         {"metric_iou_hdmap": {k: IoUMetric() for k in self.hdmap_names}}
         #     )
 
-        # -> VPQ metric (only if flow is predicted)
+        # -> VPQ metric (only if flow is predicted and there are future frames,
+        # since VPQ is evaluated on frames t>=1)
         if isinstance(self.net.heads, nn.ModuleList):
             n_c = len(self.net.heads[0].class_weights)
         else:
             n_c = len(self.net.heads.class_weights)
-        if self.with_flow:
+        if self.with_flow and self.net.out_seq_len > 1:
             dict_metrics.update({"metric_vpq": PanopticMetric(
                 n_classes=n_c,
             )})
