@@ -87,9 +87,7 @@ def visualise(cfg: DictConfig) -> None:
         with torch.inference_mode():
             model.eval()
             output = model(x)
-
-        import pdb; pdb.set_trace()
-        
+                
         prediction = generate_val_instance_pred(
             bev_bounds=cfg.data.grid,
             batch=x,
