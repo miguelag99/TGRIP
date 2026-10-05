@@ -32,7 +32,7 @@ WAYMO_CATEGORIES = [
 
 # nuScenes visibility token for objects excluded from training and evaluation
 # (min_visibility: 2). Must match VIS_NOT_IN_CAMERA in tgrip/utils/preprocess_waymo.py.
-NOT_VISIBLE = 1
+NOT_VISIBLE, VISIBLE = 1, 4
 
 
 def _quaternion(rot: np.ndarray) -> List[float]:
@@ -55,6 +55,10 @@ class WaymoDB:
     Visibility: the preprocessed visibility_token only encodes the camera field of view. Objects
     without any lidar point in their box (e.g. fully occluded tracks) are also set to NOT_VISIBLE
     here, so that they are ignored in training and evaluation.
+
+    Observed instances: Waymo has no rear camera, so objects overtaken by the ego leave every camera
+    FOV while still being tracked by the model. While `observed_instances` is set (by WaymoDataset,
+    per sample), annotations of those instances are returned as VISIBLE in every frame.
     """
 
     def __init__(self, dataroot: str, img_height: int):
@@ -63,6 +67,7 @@ class WaymoDB:
         self.version = "waymo"
         self.category = [{"name": n} for n in WAYMO_CATEGORIES]
         self._samples = {}
+        self.observed_instances = set()
         self._tables = {
             t: {}
             for t in ["sample_annotation", "sample_data", "ego_pose", "calibrated_sensor", "attribute"]
@@ -139,7 +144,15 @@ class WaymoDB:
         return samples
 
     def get(self, table: str, token: str) -> dict:
-        return self._tables[table][token]
+        rec = self._tables[table][token]
+        if table == "sample_annotation" and rec["instance_token"] in self.observed_instances:
+            return {**rec, "visibility_token": VISIBLE}
+        return rec
+
+    def visible_instances(self, samples: List[dict], min_visibility: int) -> set:
+        """Instance tokens visible in their own frame in any of the given samples."""
+        anns = (self._tables["sample_annotation"][tok] for s in samples for tok in s["anns"])
+        return {a["instance_token"] for a in anns if a["visibility_token"] >= min_visibility}
 
     def get_boxes(self, sample_data_token: str) -> list:
         # Only used for perspective segmentation, which is not supported on Waymo.
@@ -206,6 +219,18 @@ class WaymoDataset(TemporalNuScenesDataset):
         self.img_loader = TopCropLoader(
             self.img_loader, W=self.img_params["W"], H=self.img_params["H"]
         )
+
+    def __getitem__(self, index):
+        # Objects seen in any input camera frame stay valid in every BEV frame of the sample, even
+        # after they leave the cameras FOV (no rear camera on Waymo).
+        cam_records = [self.ixes[self.indices[index][i]] for i in self.cam_T_index]
+        self.nusc.observed_instances = self.nusc.visible_instances(
+            cam_records, self.img_params["min_visibility"]
+        )
+        try:
+            return super().__getitem__(index)
+        finally:
+            self.nusc.observed_instances = set()
 
     def _get_scenes(self) -> List[str]:
         self.split = WAYMO_SPLITS[self.is_train]
