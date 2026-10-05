@@ -26,7 +26,7 @@ fi
 srun \
   --gpus=2 \
   --container-image="$OUTPUT_SQSH" \
-  --container-mounts="$PATH_TO_SOURCE_CODE:/home/${IMG_USERNAME}/workspace,/raid/smontiel/Datasets/nuscenes:/home/${IMG_USERNAME}/Datasets/nuscenes" \
+  --container-mounts="$PATH_TO_SOURCE_CODE:/home/${IMG_USERNAME}/workspace,/raid/smontiel/Datasets/nuscenes:/home/${IMG_USERNAME}/Datasets/nuscenes,/raid/miguel.antunes/waymo:/home/${IMG_USERNAME}/Datasets/waymo" \
   --container-env=WANDB_API_KEY \
   --container-env=HF_TOKEN \
   bash -c '

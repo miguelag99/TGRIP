@@ -20,5 +20,5 @@ srun \
   --job-name=diffpred-bash \
   --container-env=WANDB_API_KEY \
   --container-image="$IMAGE_SQSH" \
-  --container-mounts="$PATH_TO_SOURCE_CODE:/home/${IMG_USERNAME}/workspace,/raid/smontiel/Datasets/nuscenes:/home/${IMG_USERNAME}/Datasets/nuscenes" \
+  --container-mounts="$PATH_TO_SOURCE_CODE:/home/${IMG_USERNAME}/workspace,/raid/smontiel/Datasets/nuscenes:/home/${IMG_USERNAME}/Datasets/nuscenes,/raid/miguel.antunes/waymo:/home/${IMG_USERNAME}/Datasets/waymo" \
   --pty bash
