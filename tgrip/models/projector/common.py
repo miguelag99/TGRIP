@@ -67,7 +67,7 @@ class CamProjector(nn.Module):
         bev_aug = repeat(bev_aug, "b t i j -> (b t) i j", i=4, j=4)
 
         vox_coords = torch.cat([vox_coords, torch.ones_like(vox_coords[:, :1])], dim=1)
-        vox_coords_aug = torch.bmm(bev_aug, torch.bmm(egoTin_to_seq, vox_coords))
+        vox_coords_aug = torch.bmm(egoTin_to_seq, torch.bmm(bev_aug, vox_coords))
         return vox_coords_aug[:, :3]
 
     def from_spatial_to_cams(self, vox_coords, rots, trans):
